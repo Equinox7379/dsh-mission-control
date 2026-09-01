@@ -1,0 +1,7 @@
+{
+  "method": "session.create-open",
+  "request": {},
+  "response": {
+    "sessionId": "session-created"
+  }
+}

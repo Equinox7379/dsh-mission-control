@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/protocol/rpc-mission-control-close-v1.schema.json",
+  "title": "mission-control.close@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "request", "response"],
+  "properties": {
+    "method": { "const": "mission-control.close" },
+    "request": { "type": "object", "additionalProperties": false, "maxProperties": 0 },
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["open"],
+      "properties": { "open": { "const": false } }
+    }
+  }
+}

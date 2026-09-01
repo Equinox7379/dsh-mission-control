@@ -1,0 +1,9 @@
+{
+  "method": "session.open",
+  "request": {
+    "sessionId": "session-1"
+  },
+  "response": {
+    "sessionId": "session-1"
+  }
+}

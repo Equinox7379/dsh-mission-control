@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/protocol/rpc-workspace-list-v1.schema.json",
+  "title": "workspace.list@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "request", "response"],
+  "properties": {
+    "method": { "const": "workspace.list" },
+    "request": { "type": "object", "additionalProperties": false, "maxProperties": 0 },
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array", "maxItems": 500,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["workspaceId", "name"],
+            "properties": {
+              "workspaceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "name": { "type": "string", "maxLength": 256 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

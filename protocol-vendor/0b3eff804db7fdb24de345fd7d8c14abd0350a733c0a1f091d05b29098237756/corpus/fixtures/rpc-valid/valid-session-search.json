@@ -1,0 +1,15 @@
+{
+  "method": "session.search",
+  "request": {
+    "query": "记忆 🚀"
+  },
+  "response": {
+    "items": [
+      {
+        "sessionId": "session-1",
+        "excerpt": "匹配的会话"
+      }
+    ],
+    "hasMore": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "method": "mission-control.close",
+  "request": {},
+  "response": {
+    "open": true
+  }
+}

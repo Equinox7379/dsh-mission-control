@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-desktop.invalid/protocol/sequence-v1.schema.json",
+  "title": "Desktop Bridge v1 sequence corpus scenario",
+  "$defs": {
+    "bridgeEnvelope": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json" },
+    "requestEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/bridgeEnvelope" },
+        { "type": "object", "properties": { "kind": { "const": "request" } }, "required": ["kind"] }
+      ]
+    },
+    "responseEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/bridgeEnvelope" },
+        { "type": "object", "properties": { "kind": { "const": "response" } }, "required": ["kind"] }
+      ]
+    },
+    "readyEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/bridgeEnvelope" },
+        {
+          "type": "object",
+          "properties": { "kind": { "const": "event" }, "name": { "const": "bridge.ready" } },
+          "required": ["kind", "name"]
+        }
+      ]
+    },
+    "generation": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/generation" },
+    "nonce": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/nonce" },
+    "requestId": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/requestId" },
+    "businessName": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/businessName" },
+    "capabilities": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/capabilities" },
+    "certifiedDsh": { "$ref": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json#/$defs/certifiedDsh" },
+    "role": { "type": "string", "enum": ["native", "browser"] },
+    "handshake": {
+      "type": "string",
+      "enum": [
+        "browser-idle",
+        "browser-awaiting-response",
+        "browser-awaiting-ready",
+        "browser-ready",
+        "native-awaiting-request",
+        "native-awaiting-response",
+        "native-awaiting-ready",
+        "native-ready",
+        "degraded"
+      ]
+    },
+    "pendingRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": {
+          "oneOf": [
+            { "$ref": "#/$defs/businessName" },
+            { "const": "bridge.handshake" }
+          ]
+        },
+        "generation": { "$ref": "#/$defs/generation" }
+      },
+      "required": ["id", "name", "generation"]
+    },
+    "initial": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "handshake": { "$ref": "#/$defs/handshake" },
+        "handshakeRejectionCode": {
+          "type": ["string", "null"],
+          "pattern": "^handshake\\.[a-z0-9-]+$"
+        },
+        "offeredCapabilities": { "$ref": "#/$defs/capabilities" },
+        "acceptedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "nativeSupportedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "outgoingPending": { "type": "array", "items": { "$ref": "#/$defs/pendingRequest" } },
+        "outgoingCompleted": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "outgoingUsedIds": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingSeenIds": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingPendingResponses": { "type": "array", "items": { "$ref": "#/$defs/pendingRequest" } },
+        "sentResponses": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingRequestCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "localFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "supportedDsh": { "$ref": "#/$defs/certifiedDsh" },
+        "handshakeResponseAccepted": { "type": "boolean" }
+      },
+      "required": [
+        "role",
+        "generation",
+        "nonce",
+        "handshake",
+        "handshakeRejectionCode",
+        "offeredCapabilities",
+        "acceptedCapabilities",
+        "nativeSupportedCapabilities",
+        "outgoingPending",
+        "outgoingCompleted",
+        "outgoingUsedIds",
+        "incomingSeenIds",
+        "incomingPendingResponses",
+        "sentResponses",
+        "incomingRequestCount",
+        "localFingerprint",
+        "supportedDsh",
+        "handshakeResponseAccepted"
+      ]
+    },
+    "sendRequestStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "send-request" },
+        "message": { "$ref": "#/$defs/requestEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "receiveRequestStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "receive-request" },
+        "message": { "$ref": "#/$defs/requestEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "receiveResponseStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "receive-response" },
+        "message": { "$ref": "#/$defs/responseEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "sendResponseStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "send-response" },
+        "message": { "$ref": "#/$defs/responseEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "sendReadyStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "send-ready" },
+        "message": { "$ref": "#/$defs/readyEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "receiveReadyStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "receive-ready" },
+        "message": { "$ref": "#/$defs/readyEnvelope" }
+      },
+      "required": ["op", "message"]
+    },
+    "navigateStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "navigate" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" }
+      },
+      "required": ["op", "generation", "nonce"]
+    },
+    "timeoutStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "timeout" },
+        "id": { "$ref": "#/$defs/requestId" }
+      },
+      "required": ["op", "id"]
+    },
+    "handshakeTimeoutStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "handshake-timeout" }
+      },
+      "required": ["op"]
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "settled": { "type": "array", "items": { "$ref": "#/$defs/requestId" } },
+        "outgoingPending": { "type": "array", "items": { "$ref": "#/$defs/pendingRequest" } },
+        "dispatched": { "type": "array", "items": { "$ref": "#/$defs/requestId" } },
+        "role": { "$ref": "#/$defs/role" },
+        "handshake": { "$ref": "#/$defs/handshake" },
+        "handshakeRejectionCode": {
+          "type": ["string", "null"],
+          "pattern": "^handshake\\.[a-z0-9-]+$"
+        },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "offeredCapabilities": { "$ref": "#/$defs/capabilities" },
+        "acceptedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "nativeSupportedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "outgoingCompleted": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "outgoingUsedIds": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingSeenIds": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingPendingResponses": { "type": "array", "items": { "$ref": "#/$defs/pendingRequest" } },
+        "sentResponses": { "type": "array", "items": { "$ref": "#/$defs/requestId" }, "uniqueItems": true },
+        "incomingRequestCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "handshakeResponseAccepted": { "type": "boolean" }
+      },
+      "required": [
+        "errors",
+        "settled",
+        "outgoingPending",
+        "dispatched",
+        "role",
+        "handshake",
+        "handshakeRejectionCode",
+        "generation",
+        "nonce",
+        "offeredCapabilities",
+        "acceptedCapabilities",
+        "nativeSupportedCapabilities",
+        "outgoingCompleted",
+        "outgoingUsedIds",
+        "incomingSeenIds",
+        "incomingPendingResponses",
+        "sentResponses",
+        "incomingRequestCount",
+        "handshakeResponseAccepted"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "initial": { "$ref": "#/$defs/initial" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/sendRequestStep" },
+          { "$ref": "#/$defs/receiveRequestStep" },
+          { "$ref": "#/$defs/receiveResponseStep" },
+          { "$ref": "#/$defs/sendResponseStep" },
+          { "$ref": "#/$defs/sendReadyStep" },
+          { "$ref": "#/$defs/receiveReadyStep" },
+          { "$ref": "#/$defs/navigateStep" },
+          { "$ref": "#/$defs/timeoutStep" },
+          { "$ref": "#/$defs/handshakeTimeoutStep" }
+        ]
+      }
+    },
+    "expected": { "$ref": "#/$defs/expected" }
+  },
+  "required": ["name", "initial", "steps", "expected"]
+}

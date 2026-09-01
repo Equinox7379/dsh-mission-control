@@ -14,12 +14,12 @@ test('atomic store survives close and reopen', async () => {
   try {
     const first = new AtomicStateStore(path)
     await first.open()
-    await first.execute(0, { type: 'project.create', id: 'p1', name: 'Project' })
+    await first.execute(0, { type: 'project.create', projectId: 'project-main', title: 'Project' })
     await first.close()
     const second = new AtomicStateStore(path)
     const state = await second.open()
     assert.equal(state.revision, 1)
-    assert.equal(state.projects.p1.name, 'Project')
+    assert.equal(state.projects['project-main'].title, 'Project')
     await second.close()
   } finally { await rm(dir, { recursive: true, force: true }) }
 })
@@ -34,10 +34,26 @@ test('failed persistence does not change in-memory state', async () => {
   }
   const store = new AtomicStateStore('D:\\ignored\\state.json', io)
   await store.open()
-  await assert.rejects(store.execute(0, { type: 'project.create', id: 'p1', name: 'Project' }), /disk failed/)
+  await assert.rejects(store.execute(0, { type: 'project.create', projectId: 'project-main', title: 'Project' }), /disk failed/)
   assert.equal(store.snapshot().revision, 0)
   assert.deepEqual(store.snapshot().projects, {})
   await store.close()
+})
+
+test('malformed persisted state fails loudly instead of being replaced', async () => {
+  const malformed = JSON.stringify({
+    schemaVersion: 1, revision: 0, projects: {}, tasks: {}, runs: {}, approvals: {}, evidence: {}, audit: [],
+    settings: { ownerLabel: 'Owner', maxProjects: 1, maxTasks: 0, maxEvidence: 1, maxAuditEvents: 1 },
+  })
+  let writes = 0
+  const io = {
+    read: async () => malformed,
+    write: async () => { writes += 1 },
+    rename: async () => {}, remove: async () => {}, ensureDir: async () => {},
+  }
+  const store = new AtomicStateStore('D:\\ignored\\state.json', io)
+  await assert.rejects(store.open(), /settings\.maxTasks is invalid/)
+  assert.equal(writes, 0)
 })
 
 test('close waits for an in-flight write', async () => {
@@ -51,7 +67,7 @@ test('close waits for an in-flight write', async () => {
   }
   const store = new AtomicStateStore('D:\\ignored\\state.json', io)
   await store.open()
-  const write = store.execute(0, { type: 'project.create', id: 'p1', name: 'Project' })
+  const write = store.execute(0, { type: 'project.create', projectId: 'project-main', title: 'Project' })
   let closed = false
   const close = store.close().then(() => { closed = true })
   await new Promise((resolve) => setImmediate(resolve))

@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-desktop.invalid/protocol/bridge-v1.schema.json",
+  "title": "DshDesktop Desktop Bridge v1 Envelope",
+  "description": "Strict wire envelope for the W1-R3 protocol candidate. Stateful correlation, endpoint role, fingerprint and certified DSH compatibility are semantic runner responsibilities.",
+  "$defs": {
+    "bridge": { "const": "dsh-desktop" },
+    "protocolVersion": { "const": 1 },
+    "generation": { "type": "string", "pattern": "^gen-[0-9a-f]{16}$" },
+    "nonce": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "requestId": { "type": "string", "pattern": "^req-[0-9a-f]{32}$" },
+    "safeInteger": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "string", "maxLength": 131072 },
+        { "$ref": "#/$defs/safeInteger" },
+        {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    },
+    "businessName": {
+      "type": "string",
+      "enum": [
+        "session.list",
+        "session.search",
+        "session.current",
+        "session.open",
+        "session.create-open",
+        "workspace.list",
+        "composer.replace-draft",
+        "mission-control.open",
+        "mission-control.close"
+      ]
+    },
+    "responseName": {
+      "oneOf": [
+        { "$ref": "#/$defs/businessName" },
+        { "const": "bridge.handshake" }
+      ]
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/businessName" },
+        "version": { "const": 1 }
+      },
+      "required": ["name", "version"]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 9,
+      "items": { "$ref": "#/$defs/capability" },
+      "uniqueItems": true
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+    },
+    "certifiedDsh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "package": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      },
+      "required": ["package", "version", "sourceCommit"]
+    },
+    "handshakeRequestPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pluginVersion": { "type": "string", "minLength": 1 },
+        "protocolFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "certifiedDsh": { "$ref": "#/$defs/certifiedDsh" },
+        "capabilities": { "$ref": "#/$defs/capabilities" }
+      },
+      "required": ["pluginVersion", "protocolFingerprint", "certifiedDsh", "capabilities"]
+    },
+    "handshakeResponsePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "desktopVersion": { "type": "string", "minLength": 1 },
+        "protocolFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "acceptedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "maxMessageBytes": { "const": 262144 }
+      },
+      "required": ["desktopVersion", "protocolFingerprint", "acceptedCapabilities", "maxMessageBytes"]
+    },
+    "readyPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "state": { "const": "ready" } },
+      "required": ["state"]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "details": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Handshake request",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "request" },
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": { "const": "bridge.handshake" },
+        "payload": { "$ref": "#/$defs/handshakeRequestPayload" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "id", "name", "payload"]
+    },
+    {
+      "title": "Business request",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "request" },
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": { "$ref": "#/$defs/businessName" },
+        "payload": { "$ref": "#/$defs/payload" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "id", "name", "payload"]
+    },
+    {
+      "title": "Ready event",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "event" },
+        "name": { "const": "bridge.ready" },
+        "payload": { "$ref": "#/$defs/readyPayload" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "name", "payload"]
+    },
+    {
+      "title": "Handshake success response",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "response" },
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": { "const": "bridge.handshake" },
+        "ok": { "const": true },
+        "payload": { "$ref": "#/$defs/handshakeResponsePayload" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "id", "name", "ok", "payload"]
+    },
+    {
+      "title": "Business success response",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "response" },
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": { "$ref": "#/$defs/businessName" },
+        "ok": { "const": true },
+        "payload": { "$ref": "#/$defs/payload" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "id", "name", "ok", "payload"]
+    },
+    {
+      "title": "Failure response",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bridge": { "$ref": "#/$defs/bridge" },
+        "v": { "$ref": "#/$defs/protocolVersion" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "kind": { "const": "response" },
+        "id": { "$ref": "#/$defs/requestId" },
+        "name": { "$ref": "#/$defs/responseName" },
+        "ok": { "const": false },
+        "payload": { "type": "object", "additionalProperties": false, "maxProperties": 0 },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "required": ["bridge", "v", "generation", "nonce", "kind", "id", "name", "ok", "payload", "error"]
+    }
+  ]
+}

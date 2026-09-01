@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/protocol/rpc-session-search-v1.schema.json",
+  "title": "session.search@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "request", "response"],
+  "properties": {
+    "method": { "const": "session.search" },
+    "request": {
+      "type": "object", "additionalProperties": false, "required": ["query"],
+      "properties": { "query": { "type": "string", "minLength": 1, "maxLength": 200 } }
+    },
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["items", "hasMore"],
+      "properties": {
+        "items": {
+          "type": "array", "maxItems": 20,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["sessionId", "excerpt"],
+            "properties": {
+              "sessionId": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "excerpt": { "type": "string", "maxLength": 240 }
+            }
+          }
+        },
+        "hasMore": { "type": "boolean" }
+      }
+    }
+  }
+}

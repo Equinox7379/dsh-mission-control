@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/protocol/rpc-session-create-open-v1.schema.json",
+  "title": "session.create-open@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "request", "response"],
+  "properties": {
+    "method": { "const": "session.create-open" },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "cwd": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId"],
+      "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": 256 } }
+    }
+  }
+}
