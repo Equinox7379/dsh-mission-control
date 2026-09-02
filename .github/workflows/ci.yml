@@ -8,13 +8,15 @@ on:
 jobs:
   verify:
     runs-on: windows-latest
-    env:
-      DSH_MC_TEST_TMP: ${{ runner.temp }}\dsh-mission-control-tests
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\playwright-browsers
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+      - name: Configure runner-local paths
+        shell: pwsh
+        run: |
+          "DSH_MC_TEST_TMP=${{ runner.temp }}\dsh-mission-control-tests" >> $env:GITHUB_ENV
+          "PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}\playwright-browsers" >> $env:GITHUB_ENV
       - name: Assert exact event head
         shell: pwsh
         run: |
