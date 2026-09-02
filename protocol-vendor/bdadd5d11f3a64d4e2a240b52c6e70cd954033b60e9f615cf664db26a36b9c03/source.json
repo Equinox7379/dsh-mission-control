@@ -1,7 +1,7 @@
 {
   "protocol": "dsh-desktop-bridge-v1",
-  "fingerprint": "0b3eff804db7fdb24de345fd7d8c14abd0350a733c0a1f091d05b29098237756",
-  "desktopCommit": "2996a010af57d74e764f34f6c3fdc6f201232397",
+  "fingerprint": "bdadd5d11f3a64d4e2a240b52c6e70cd954033b60e9f615cf664db26a36b9c03",
+  "desktopCommit": "553d9d55da2c95bb6f15cda7c5afc12a2c1736dd",
   "files": [
     {
       "path": "bridge-v1.schema.json",
