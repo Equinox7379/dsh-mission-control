@@ -1,0 +1,11 @@
+{
+  "method": "workspace.list",
+  "request": {},
+  "response": {
+    "items": [
+      {
+        "workspaceId": "workspace-1"
+      }
+    ]
+  }
+}

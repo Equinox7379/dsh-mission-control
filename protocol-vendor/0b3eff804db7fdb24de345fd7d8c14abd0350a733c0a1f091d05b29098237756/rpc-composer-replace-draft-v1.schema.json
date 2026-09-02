@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh.local/protocol/rpc-composer-replace-draft-v1.schema.json",
+  "title": "composer.replace-draft@1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "request", "response"],
+  "properties": {
+    "method": { "const": "composer.replace-draft" },
+    "request": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "text"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "text": { "type": "string", "maxLength": 131072 }
+      }
+    },
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "newLength"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "newLength": { "type": "integer", "minimum": 0, "maximum": 131072 }
+      }
+    }
+  }
+}

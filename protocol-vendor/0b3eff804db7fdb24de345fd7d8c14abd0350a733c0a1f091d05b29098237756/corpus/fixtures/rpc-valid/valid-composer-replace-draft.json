@@ -1,0 +1,11 @@
+{
+  "method": "composer.replace-draft",
+  "request": {
+    "sessionId": "session-1",
+    "text": "继续处理 🚀"
+  },
+  "response": {
+    "sessionId": "session-1",
+    "newLength": 7
+  }
+}

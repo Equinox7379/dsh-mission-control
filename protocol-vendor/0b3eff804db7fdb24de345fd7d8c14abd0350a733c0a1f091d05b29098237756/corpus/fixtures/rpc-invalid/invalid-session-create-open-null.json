@@ -1,0 +1,9 @@
+{
+  "method": "session.create-open",
+  "request": {
+    "workspaceId": null
+  },
+  "response": {
+    "sessionId": "session-created"
+  }
+}

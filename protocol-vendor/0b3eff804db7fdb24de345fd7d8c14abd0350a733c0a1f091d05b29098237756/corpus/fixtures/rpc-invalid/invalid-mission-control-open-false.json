@@ -1,0 +1,7 @@
+{
+  "method": "mission-control.open",
+  "request": {},
+  "response": {
+    "open": false
+  }
+}

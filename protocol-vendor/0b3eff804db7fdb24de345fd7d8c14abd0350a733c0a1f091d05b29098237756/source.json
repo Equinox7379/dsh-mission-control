@@ -1,0 +1,123 @@
+{
+  "protocol": "dsh-desktop-bridge-v1",
+  "fingerprint": "0b3eff804db7fdb24de345fd7d8c14abd0350a733c0a1f091d05b29098237756",
+  "desktopCommit": "2996a010af57d74e764f34f6c3fdc6f201232397",
+  "files": [
+    {
+      "path": "bridge-v1.schema.json",
+      "sha256": "fa8ad96cc627fb51cb49729976d471d3a21a14b8ff7850c521342c9c578f2038"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-composer-replace-draft-null.json",
+      "sha256": "27c40b4931e6cbec3d69eb66d206d10985a96b0f5e193e3b03a66ed09805ebdd"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-mission-control-close-true.json",
+      "sha256": "0d8468176671c63b561b3c9fc49e0b7c1a06006c0e76b5468ec9d1cf09c954a4"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-mission-control-open-false.json",
+      "sha256": "bec8438d33328523db9d1ea4536944a7ffb23a1afdba5adf8eefdbb3ac508739"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-session-create-open-null.json",
+      "sha256": "9cbd42bc8d1cc86ee360252549287f586adadabed785e3a9b847395e8d86a3d9"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-session-current-null.json",
+      "sha256": "ed7627dcc0a46c50966d20b8cc255bd3a9b389d366464e9f313bdec7ac264650"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-session-list-unknown-field.json",
+      "sha256": "80c8423709d02f177ef73676397499b6be00728148e092bc5fcde1652c39e379"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-session-open-extra-field.json",
+      "sha256": "733ad0fd547a006bb24a34de557c8cbe42c2a434ca0f919e61a4d7240f336f60"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-session-search-null.json",
+      "sha256": "cb8643f28c1485de7cfb5f765a51b4568e9c9fddd9b4828c4b379a7e1973daad"
+    },
+    {
+      "path": "corpus/fixtures/rpc-invalid/invalid-workspace-list-missing-name.json",
+      "sha256": "954c0bead7a6d1308b2f352127a95b8b6474697d7d6ba924b71838c02d3d6017"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-composer-replace-draft.json",
+      "sha256": "2f67a40586d2073b7af5d11dc56a34f52306dc8a807cf00df9c993509069553c"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-mission-control-close.json",
+      "sha256": "dcfd2b99de7b7b37c22e528bb5ac2dead53aca9b37c55ec1c11bb71737fe2ec0"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-mission-control-open.json",
+      "sha256": "037aed213c0498d936abe39ee8f9baf8c739872ea45a260fa0a99c0c4904ce08"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-session-create-open.json",
+      "sha256": "3a64297d9e5967281f88438fcf793dafce3b22333d66c13be5c96bdce8292de7"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-session-current.json",
+      "sha256": "cc78120a5d6112bab303bc7cf164c9bac97284be2bd9600382b6c9e33439a3d6"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-session-list.json",
+      "sha256": "707298449e84873479989c3abcef6cf6f8068f67d46b25cb2cab0f1fcb24b4c5"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-session-open.json",
+      "sha256": "ed554188449251af338529fcf276364762fb6b560fcdbb493a4bdeeeff81ed99"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-session-search.json",
+      "sha256": "24143c93f3b3043942c119871a6ee880be28c13e9767ac7f919f767a5933dd80"
+    },
+    {
+      "path": "corpus/fixtures/rpc-valid/valid-workspace-list.json",
+      "sha256": "58c453a75361102d8adc2276b69a72fb714c78821ccfb00bd1d1c8017f4a9e15"
+    },
+    {
+      "path": "rpc-composer-replace-draft-v1.schema.json",
+      "sha256": "9ad5563b2ea3399e9562e8317058322d4f85e63d553c8c4cffa424b6907cada5"
+    },
+    {
+      "path": "rpc-mission-control-close-v1.schema.json",
+      "sha256": "9c18b48f758959ff83b4b0129d5aabf4967aedfb3e5670aa22289a0aee8a3538"
+    },
+    {
+      "path": "rpc-mission-control-open-v1.schema.json",
+      "sha256": "fc57b808ae9a833a39ee061b7a5d0118d42ad107757b30d1dcc0f48d80b65310"
+    },
+    {
+      "path": "rpc-session-create-open-v1.schema.json",
+      "sha256": "e4edd00ea4c4703c9fc4e410c4d20a1c7003fd08b9c057cbb235f0a615f7f434"
+    },
+    {
+      "path": "rpc-session-current-v1.schema.json",
+      "sha256": "51e0603596ed807187b311dc857ffe6f0ca7681d54c5e1b4e3ea61cc2fc57b48"
+    },
+    {
+      "path": "rpc-session-list-v1.schema.json",
+      "sha256": "1cb2d045af3cc0917daf26e2b05bd8d2a63810ea3494a352f8171068e28c38fc"
+    },
+    {
+      "path": "rpc-session-open-v1.schema.json",
+      "sha256": "5999aaf619c5eeefb76d631db81e439a3c7957bee1ec605789465e99c884394c"
+    },
+    {
+      "path": "rpc-session-search-v1.schema.json",
+      "sha256": "3e2a60e597b66e6f7537da2bcc627ba835cd2c9aabbe9043aaba95586360b8e7"
+    },
+    {
+      "path": "rpc-workspace-list-v1.schema.json",
+      "sha256": "c61341d945f48a1ea2144f5d0499512a4add4ee1e944eedbfa811aae64a0d1f8"
+    },
+    {
+      "path": "sequence-v1.schema.json",
+      "sha256": "1c59b7abaf8916fc5090bdab46080c680287efac3d899f02dcbc220f208e6478"
+    }
+  ]
+}

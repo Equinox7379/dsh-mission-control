@@ -1,0 +1,11 @@
+{
+  "method": "composer.replace-draft",
+  "request": {
+    "sessionId": "session-1",
+    "text": null
+  },
+  "response": {
+    "sessionId": "session-1",
+    "newLength": 0
+  }
+}

@@ -26,7 +26,11 @@ export class AtomicStateStore {
 
   async open(): Promise<MissionControlStateV1> {
     await this.io.ensureDir(dirname(this.statePath))
-    try { this.state = validateState(JSON.parse(await this.io.read(this.statePath))) }
+    try {
+      const parsed = JSON.parse(await this.io.read(this.statePath))
+      this.state = validateState(parsed)
+      if (JSON.stringify(parsed) !== JSON.stringify(this.state)) await this.persist(this.state)
+    }
     catch (error: any) {
       if (error?.code !== 'ENOENT') throw error
       await this.persist(this.state)

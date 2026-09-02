@@ -1,9 +1,11 @@
+import { assertRpcRequest, assertRpcResponse, METHODS, PROTOCOL_FINGERPRINT, type RpcMethod } from './rpc-contracts.js'
+
 const BRIDGE = 'dsh-desktop'
 const VERSION = 1
 const MAX_BYTES = 262_144
-export const PROTOCOL_FINGERPRINT = '633e9a538ca22d2fc43e273124b82d0c6cd8a08dc535b4e9c070cfbc91fe9ff8'
-export const METHODS = ['session.list','session.search','session.current','session.open','session.create-open','workspace.list','composer.replace-draft','mission-control.open','mission-control.close'] as const
-type Method = typeof METHODS[number]
+export { PROTOCOL_FINGERPRINT }
+export { METHODS }
+type Method = RpcMethod
 type WebView = { postMessage(message: unknown): void; addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void; removeEventListener(type: 'message', listener: (event: { data: unknown }) => void): void }
 type UiControl = { setOpen(open: boolean): void }
 
@@ -53,8 +55,20 @@ const listItems = (snapshot: any): any[] => {
   return []
 }
 const sessionId = (item: any) => String(item?.sessionId ?? item?.id ?? '')
+const availableMethods = (ctx: any): Method[] => METHODS.filter((name) => {
+  switch (name) {
+    case 'session.list': case 'session.current': return Boolean(ctx.sessions?.list?.getSnapshot)
+    case 'session.search': return typeof ctx.sessions?.search === 'function'
+    case 'session.open': return typeof ctx.sessions?.open === 'function'
+    case 'session.create-open': return typeof ctx.sessions?.create === 'function' && typeof ctx.sessions?.open === 'function'
+    case 'workspace.list': return Boolean(ctx.workspaces?.list?.getSnapshot)
+    case 'composer.replace-draft': return typeof ctx.sessions?.scope === 'function' && Boolean(ctx.conversation?.input?.for)
+    case 'mission-control.open': case 'mission-control.close': return true
+  }
+})
 
 async function dispatch(ctx: any, ui: UiControl, name: Method, payload: Record<string, any>, signal: AbortSignal): Promise<Record<string, unknown>> {
+  assertRpcRequest(name, payload)
   switch (name) {
     case 'session.list': {
       if (!exact(payload, [])) throw new Error('message.invalid')
@@ -84,7 +98,9 @@ async function dispatch(ctx: any, ui: UiControl, name: Method, payload: Record<s
       if (!exact(payload, [], ['workspaceId', 'cwd']) || (payload.workspaceId !== undefined && typeof payload.workspaceId !== 'string') || (payload.cwd !== undefined && typeof payload.cwd !== 'string')) throw new Error('message.invalid')
       const created = await ctx.sessions.create({ ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}), ...(payload.cwd ? { cwd: payload.cwd } : {}) })
       const id = sessionId(created) || (typeof created === 'string' ? created : '')
-      if (!id) throw new Error('session.create-failed'); await ctx.sessions.open(id); return { sessionId: id }
+      if (!id) throw new Error('session.create-failed')
+      try { await ctx.sessions.open(id) } catch { /* Preserve the created id so Desktop can recover without creating twice. */ }
+      return { sessionId: id }
     }
     case 'workspace.list': {
       if (!exact(payload, [])) throw new Error('message.invalid')
@@ -108,7 +124,8 @@ export function installBrowserBridge(ctx: any, ui: UiControl): BrowserBridge {
   let state: BridgeStatus = { state: webview ? 'handshaking' : 'edge-only', accepted: [], pending: 0 }
   if (!webview) return { status: () => ({ ...state }), dispose: () => { state = { ...state, state: 'disposed' } } }
   const generation = `gen-${randomHex(8)}`; const nonce = randomHex(16); const requestId = `req-${randomHex(16)}`
-  const offered = METHODS.map((name) => ({ name, version: 1 }))
+  const available = availableMethods(ctx)
+  const offered = available.map((name) => ({ name, version: 1 }))
   const seen = new Set<string>(); const controllers = new Map<string, AbortController>()
   const post = (message: unknown) => webview.postMessage(JSON.parse(encode(message)))
   const base = { bridge: BRIDGE, v: VERSION, generation, nonce }
@@ -122,8 +139,8 @@ export function installBrowserBridge(ctx: any, ui: UiControl): BrowserBridge {
       const responseShape = exact(message, ['bridge','v','generation','nonce','kind','id','name','ok','payload'])
       const payloadShape = exact(message.payload, ['desktopVersion','protocolFingerprint','acceptedCapabilities','maxMessageBytes'])
       const capabilityShape = Array.isArray(message.payload?.acceptedCapabilities)
-        && message.payload.acceptedCapabilities.length <= METHODS.length
-        && message.payload.acceptedCapabilities.every((item: any) => exact(item, ['name','version']) && typeof item.name === 'string' && METHODS.includes(item.name as Method) && item.version === 1)
+        && message.payload.acceptedCapabilities.length <= available.length
+        && message.payload.acceptedCapabilities.every((item: any) => exact(item, ['name','version']) && typeof item.name === 'string' && available.includes(item.name as Method) && item.version === 1)
       if (!responseShape || message.ok !== true || !payloadShape || typeof message.payload.desktopVersion !== 'string' || message.payload.protocolFingerprint !== PROTOCOL_FINGERPRINT || message.payload.maxMessageBytes !== MAX_BYTES || !capabilityShape) {
         state = { state: 'degraded', accepted: [], pending: 0, lastError: message.error?.code ?? 'handshake.semantic-invalid' }; return
       }
@@ -140,6 +157,7 @@ export function installBrowserBridge(ctx: any, ui: UiControl): BrowserBridge {
     try {
       const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('request.timeout')) }, 15_000) })
       const payload = await Promise.race([dispatch(ctx, ui, message.name as Method, message.payload, controller.signal), timeout])
+      assertRpcResponse(message.name as Method, payload)
       post({ ...base, kind: 'response', id: message.id, name: message.name, ok: true, payload })
     }
     catch (error: any) { fail(message, String(error?.message ?? 'internal').includes('.') ? String(error.message) : 'internal') }

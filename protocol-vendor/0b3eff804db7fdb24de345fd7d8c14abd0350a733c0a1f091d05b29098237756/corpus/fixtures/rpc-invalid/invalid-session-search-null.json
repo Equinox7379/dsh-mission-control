@@ -1,0 +1,10 @@
+{
+  "method": "session.search",
+  "request": {
+    "query": null
+  },
+  "response": {
+    "items": [],
+    "hasMore": false
+  }
+}

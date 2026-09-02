@@ -1,0 +1,14 @@
+{
+  "method": "session.list",
+  "request": {},
+  "response": {
+    "items": [
+      {
+        "sessionId": "session-1",
+        "running": false,
+        "blank": true,
+        "extra": true
+      }
+    ]
+  }
+}
