@@ -98,7 +98,9 @@ async function dispatch(ctx: any, ui: UiControl, name: Method, payload: Record<s
       if (!exact(payload, [], ['workspaceId', 'cwd']) || (payload.workspaceId !== undefined && typeof payload.workspaceId !== 'string') || (payload.cwd !== undefined && typeof payload.cwd !== 'string')) throw new Error('message.invalid')
       const created = await ctx.sessions.create({ ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}), ...(payload.cwd ? { cwd: payload.cwd } : {}) })
       const id = sessionId(created) || (typeof created === 'string' ? created : '')
-      if (!id) throw new Error('session.create-failed'); await ctx.sessions.open(id); return { sessionId: id }
+      if (!id) throw new Error('session.create-failed')
+      try { await ctx.sessions.open(id) } catch { /* Preserve the created id so Desktop can recover without creating twice. */ }
+      return { sessionId: id }
     }
     case 'workspace.list': {
       if (!exact(payload, [])) throw new Error('message.invalid')

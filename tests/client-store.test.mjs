@@ -9,6 +9,27 @@ const success = (request, result) => json({ v: 1, requestId: request.requestId, 
 const failure = (request, code, message, status = 400) => json({ v: 1, requestId: request.requestId, ok: false, error: { code, message } }, status)
 const health = () => json({ ok: true, pluginVersion: '0.1.0', protocolFingerprint: fingerprint, certifiedDsh: '0.1.2-alpha.3', storage: 'ready' })
 
+test('connect uses a browser-owned same-origin health GET before the API handshake', async () => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options })
+    if (String(url).endsWith('/health')) return health()
+    const request = JSON.parse(options.body)
+    if (request.method === 'system.handshake') return success(request, { csrf: 'c'.repeat(43), protocolFingerprint: fingerprint })
+    return success(request, state(0))
+  }
+  const store = new MissionControlClientStore()
+  try {
+    await store.connect()
+    assert.equal(calls[0].url, '/mission-control/health')
+    assert.equal(calls[0].options.method, 'GET')
+    assert.equal(calls[0].options.credentials, 'same-origin')
+    assert.equal(calls[0].options.cache, 'no-store')
+    assert.equal(calls[0].options.headers, undefined)
+  } finally { store.close(); globalThis.fetch = originalFetch }
+})
+
 test('revision conflict refreshes authoritative state without retrying the mutation', async () => {
   const originalFetch = globalThis.fetch
   let snapshotCalls = 0; let mutationCalls = 0

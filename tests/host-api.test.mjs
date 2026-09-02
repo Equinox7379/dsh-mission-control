@@ -31,19 +31,35 @@ test('Host API enforces same-origin handshake, CSRF, and state revisions', async
   const host = `127.0.0.1:${address.port}`
   const origin = `http://${host}`
   expectedHosts.add(host); expectedOrigins.add(origin)
-  const headers = { host, origin, 'sec-fetch-site': 'same-origin' }
+  const browserGetHeaders = { host, 'sec-fetch-site': 'same-origin' }
+  const headers = { ...browserGetHeaders, origin }
   const post = (body, csrf) => fetch(`${origin}/mission-control/api`, {
     method: 'POST', headers: { ...headers, 'content-type': 'application/json', ...(csrf ? { 'x-mission-control-csrf': csrf } : {}) }, body: JSON.stringify(body),
   })
 
   try {
-    const healthResponse = await fetch(`${origin}/mission-control/health`, { headers })
+    const healthResponse = await fetch(`${origin}/mission-control/health`, { headers: browserGetHeaders })
     const health = await healthResponse.json()
     assert.equal(healthResponse.status, 200)
     assert.equal(Object.hasOwn(health, 'csrf'), false)
     assert.equal(healthResponse.headers.get('access-control-allow-origin'), null)
     assert.equal(healthResponse.headers.get('cache-control'), 'no-store')
     assert.equal(healthResponse.headers.get('x-content-type-options'), 'nosniff')
+
+    const explicitHealthOrigin = await fetch(`${origin}/mission-control/health`, { headers })
+    assert.equal(explicitHealthOrigin.status, 200)
+
+    const foreignHealthOrigin = await fetch(`${origin}/mission-control/health`, {
+      headers: { ...browserGetHeaders, origin: 'http://127.0.0.1:1' },
+    })
+    const foreignHealthBody = await foreignHealthOrigin.json()
+    assert.equal(foreignHealthOrigin.status, 403)
+    assert.equal(foreignHealthBody.error.code, 'origin-refused')
+
+    const nullHealthOrigin = await fetch(`${origin}/mission-control/health`, {
+      headers: { ...browserGetHeaders, origin: 'null' },
+    })
+    assert.equal(nullHealthOrigin.status, 403)
 
     const wrongMethod = await fetch(`${origin}/mission-control/health`, { method: 'POST' })
     assert.equal(wrongMethod.status, 405)
@@ -52,6 +68,14 @@ test('Host API enforces same-origin handshake, CSRF, and state revisions', async
       method: 'POST', headers: { ...headers, 'content-type': 'text/plain' }, body: '{}',
     })
     assert.equal(wrongContentType.status, 415)
+
+    const missingApiOrigin = await fetch(`${origin}/mission-control/api`, {
+      method: 'POST', headers: { ...browserGetHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, requestId: 'mc-no-origin', method: 'system.handshake', args: {} }),
+    })
+    const missingApiOriginBody = await missingApiOrigin.json()
+    assert.equal(missingApiOrigin.status, 403)
+    assert.equal(missingApiOriginBody.error.code, 'origin-refused')
 
     const handshakeResponse = await post({ v: 1, requestId: 'mc-handshake', method: 'system.handshake', args: {} })
     const handshake = await handshakeResponse.json()

@@ -1,0 +1,50 @@
+name: exact-head-ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    env:
+      DSH_MC_TEST_TMP: ${{ runner.temp }}\dsh-mission-control-tests
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\playwright-browsers
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Assert exact event head
+        shell: pwsh
+        run: |
+          $actual = git rev-parse HEAD
+          if ($actual -ne '${{ github.sha }}') {
+            throw "checkout drift: expected ${{ github.sha }}, got $actual"
+          }
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Test
+        run: pnpm test
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
+      - name: Browser health smoke
+        run: pnpm run test:browser
+      - name: Pack smoke
+        shell: pwsh
+        run: |
+          $env:DSH_MC_LIB_DIR = (Resolve-Path 'lib').Path
+          $env:DSH_MC_PACK_STAGE = Join-Path '${{ runner.temp }}' 'dsh-mission-control-pack-stage'
+          $env:DSH_MC_PACK_DEST = Join-Path '${{ runner.temp }}' 'dsh-mission-control-pack-dest'
+          npm run pack:built
+          $packages = @(Get-ChildItem -LiteralPath $env:DSH_MC_PACK_DEST -Filter '*.tgz')
+          if ($packages.Count -ne 1) { throw "expected one package, got $($packages.Count)" }

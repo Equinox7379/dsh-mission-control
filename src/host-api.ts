@@ -117,10 +117,12 @@ export function createHostApi(options: HostApiOptions) {
   const certifiedDsh = options.certifiedDsh ?? '0.1.2-alpha.3'
   const protocolFingerprint = options.protocolFingerprint ?? 'unknown'
 
-  const guardBase = (req: IncomingMessage): string | null => {
+  const guardBase = (req: IncomingMessage, originRequired: boolean): string | null => {
     if (!loopback(req.socket.remoteAddress)) return 'loopback-required'
     if (!options.expectedHosts.has(String(req.headers.host ?? ''))) return 'host-refused'
-    if (!options.expectedOrigins.has(String(req.headers.origin ?? ''))) return 'origin-refused'
+    const origin = req.headers.origin
+    if ((originRequired || origin !== undefined)
+      && (Array.isArray(origin) || !options.expectedOrigins.has(String(origin ?? '')))) return 'origin-refused'
     if (req.headers['sec-fetch-site'] !== 'same-origin') return 'fetch-site-refused'
     return null
   }
@@ -138,7 +140,7 @@ export function createHostApi(options: HostApiOptions) {
       if (path !== HEALTH_PATH && path !== API_PATH) return send(res, 404, { ok: false, error: { code: 'route-not-found', message: 'Not found' } })
       const expectedMethod = path === HEALTH_PATH ? 'GET' : 'POST'
       if (req.method !== expectedMethod) return send(res, 405, { ok: false, error: { code: 'method-not-allowed', message: 'Method not allowed' } })
-      const baseError = guardBase(req)
+      const baseError = guardBase(req, path === API_PATH)
       if (baseError) return send(res, 403, { ok: false, error: { code: baseError, message: 'Request refused' } })
        if (path === HEALTH_PATH) return send(res, 200, { ok: true, pluginVersion, apiVersion: 1, protocolFingerprint, certifiedDsh, storage: 'ready' })
       if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(String(req.headers['content-type'] ?? ''))) return send(res, 415, { ok: false, error: { code: 'content-type', message: 'application/json required' } })
