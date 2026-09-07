@@ -16,8 +16,10 @@ export function isSessionNotFoundError(error: unknown): boolean {
 }
 
 export async function apply(ctx: any): Promise<void> {
-  const home = process.env.DSH_HOME
-  if (!home || !isAbsolute(home)) throw new Error('dsh-mission-control requires an absolute DSH_HOME')
+  // Official boot resolves the default ~/.dsh without materializing DSH_HOME.
+  // Use its public resolver so the plugin shares the host's actual data root.
+  const home = typeof ctx.dshHomePath === 'function' ? ctx.dshHomePath() : process.env.DSH_HOME
+  if (typeof home !== 'string' || !home || !isAbsolute(home)) throw new Error('dsh-mission-control requires an absolute resolved DSH_HOME')
   const store = new AtomicStateStore(join(home, 'storages', 'dsh-mission-control', 'state-v1.json'))
   await store.open()
   ctx.effect(() => async () => { await store.close() }, 'dsh-mission-control: storage lifecycle')
