@@ -1,6 +1,6 @@
 import { clip, TERMINAL, type DshEvent, type ExecutionRun } from './types.js'
 
-/** Only official alpha.4 events from the correlated user RPC and its turn can settle a run. */
+/** Only official DSH events from the correlated user RPC and its turn can settle a run. */
 export function foldExecution(run: ExecutionRun, event: DshEvent): ExecutionRun {
   if (!Number.isSafeInteger(event.seq) || event.seq <= run.cursor || event.seq <= run.baseSeq) return run
   if (TERMINAL.has(run.status) || run.releasedAt !== undefined || run.status === 'detached') return run

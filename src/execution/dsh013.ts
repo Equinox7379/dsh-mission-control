@@ -4,8 +4,8 @@ import { ExecutionError, type DshEvent, type DshExecutionPort, type ExecutionRun
 const array = (value: unknown): any[] => Array.isArray(value) ? value : []
 const ownRpc = (message: any, requestId: string) => message?.source?.kind === 'user' && message.source.rpcId === requestId
 
-/** Thin adapter to the verified alpha.4 host SessionController, not a second Agent runtime. */
-export function createAlpha4ExecutionPort(ctx: any, controller: any, protectedHome?: string): DshExecutionPort {
+/** Thin adapter to the verified DSH 0.1.3 host SessionController, not a second Agent runtime. */
+export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHome?: string): DshExecutionPort {
   // Cordis permits optional lookup through get(); undeclared property access
   // throws even when optional chaining is used. Keep plain standalone hosts usable.
   const service = (name: string) => typeof ctx?.get === 'function' ? ctx.get(name) : ctx?.[name]

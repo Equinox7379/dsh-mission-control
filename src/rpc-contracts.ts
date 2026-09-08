@@ -2,7 +2,7 @@ export const METHODS = [
   'session.list', 'session.search', 'session.current', 'session.open', 'session.create-open',
   'workspace.list', 'composer.replace-draft', 'mission-control.open', 'mission-control.close',
 ] as const
-export const PROTOCOL_FINGERPRINT = 'bdadd5d11f3a64d4e2a240b52c6e70cd954033b60e9f615cf664db26a36b9c03'
+export const PROTOCOL_FINGERPRINT = '275a7d47101c0bf1238df431d07be8a99b913ab78ae59b3afe122ee783e883a3'
 
 export type RpcMethod = typeof METHODS[number]
 

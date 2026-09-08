@@ -4,7 +4,7 @@ import { AtomicStateStore } from './storage.js'
 import { PROTOCOL_FINGERPRINT } from './rpc-contracts.js'
 import { TaskExecutionService } from './execution/runner.js'
 import { ExecutionFile } from './execution/store.js'
-import { createAlpha4ExecutionPort } from './execution/alpha4.js'
+import { createDsh013ExecutionPort } from './execution/dsh013.js'
 import { executionApi } from './execution/http.js'
 
 export const inject: string[] = []
@@ -40,7 +40,7 @@ export async function apply(ctx: any): Promise<void> {
     const execution = new TaskExecutionService(
       store,
       new ExecutionFile(join(home, 'storages', 'dsh-mission-control', 'execution-v1.json')),
-      createAlpha4ExecutionPort(scope, sessionController, home),
+      createDsh013ExecutionPort(scope, sessionController, home),
     )
     scope.effect(() => async () => { await execution.close() }, 'dsh-mission-control: execution observer')
     const api = createHostApi({
@@ -49,7 +49,7 @@ export async function apply(ctx: any): Promise<void> {
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
       version: '0.2.0',
-      certifiedDsh: '0.1.2-alpha.4',
+      certifiedDsh: '0.1.3-alpha.2',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,
       validateSession: async (sessionId, signal) => {
