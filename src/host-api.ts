@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { DomainError, type DomainCommand } from './domain.js'
 import { buildExport, writeExport } from './export.js'
 import type { AtomicStateStore } from './storage.js'
+import { EXECUTION_METHODS } from './execution/http.js'
+import { ExecutionError } from './execution/types.js'
 
 const API_PATH = '/mission-control/api'
 const HEALTH_PATH = '/mission-control/health'
@@ -18,6 +20,7 @@ const MUTATIONS = new Set([
 const READS = new Set(['system.status', 'state.snapshot', 'project.get', 'task.get', 'task.list', 'audit.page', 'export.preview'])
 
 export interface HostApiOptions {
+  execution?: { handle(method: string, args: unknown): Promise<unknown> }
   store: AtomicStateStore
   expectedHosts: ReadonlySet<string>
   expectedOrigins: ReadonlySet<string>
@@ -113,8 +116,8 @@ function page<T>(items: T[], offset: number, limit: number) {
 
 export function createHostApi(options: HostApiOptions) {
   const csrf = options.csrf ?? randomBytes(32).toString('base64url')
-  const pluginVersion = options.version ?? '0.1.0'
-  const certifiedDsh = options.certifiedDsh ?? '0.1.2-alpha.3'
+  const pluginVersion = options.version ?? '0.2.0'
+  const certifiedDsh = options.certifiedDsh ?? '0.1.2-alpha.4'
   const protocolFingerprint = options.protocolFingerprint ?? 'unknown'
 
   const guardBase = (req: IncomingMessage, originRequired: boolean): string | null => {
@@ -158,6 +161,15 @@ export function createHostApi(options: HostApiOptions) {
         }
         if (String(req.headers['x-mission-control-csrf'] ?? '') !== csrf) throw new DomainError('csrf-refused', 'Mission Control handshake is required')
 
+        if (EXECUTION_METHODS.has(method)) {
+          if (envelope.expectedStateRevision !== undefined) throw new DomainError('invalid-envelope', 'execution requests use their own preview and run identity')
+          if (!options.execution) throw new DomainError('capability-unavailable', 'Task execution is unavailable')
+          try { return success(res, requestId, await options.execution.handle(method, args)) }
+          catch (error) {
+            if (error instanceof ExecutionError) throw new DomainError(error.code, error.message)
+            throw error
+          }
+        }
         const state = options.store.snapshot()
         if (READS.has(method)) {
           if (envelope.expectedStateRevision !== undefined) throw new DomainError('invalid-envelope', 'read request must not carry a revision precondition')

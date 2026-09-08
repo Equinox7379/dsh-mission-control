@@ -14,9 +14,10 @@ function requiredAbsolutePath(name) {
   return resolve(value)
 }
 
+await mkdir(dirname(stageDir), { recursive: true })
 await mkdir(stageDir)
 await mkdir(destinationDir, { recursive: true })
-await cp(libDir, join(stageDir, 'lib'), { recursive: true })
+await cp(libDir, join(stageDir, 'lib'), { recursive: true, dereference: true })
 await cp(join(root, 'protocol-vendor'), join(stageDir, 'protocol-vendor'), { recursive: true })
 await cp(join(root, 'cordis.patch.yml'), join(stageDir, 'cordis.patch.yml'))
 

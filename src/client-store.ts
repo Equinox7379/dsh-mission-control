@@ -92,6 +92,20 @@ export class MissionControlClientStore {
     }
   }
 
+  /** Separate request lifetime; observation never aborts a task mutation or resends an execution. */
+  async executionCall(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
+    if (!this.csrf || this.value.phase !== 'ready') throw { code: 'execution.unavailable', message: '指挥台主机尚未连接，请先重新连接。' }
+    try { return await this.call(method, args, { signal }) }
+    catch (error: any) {
+      if (error?.code === 'csrf-refused' && !signal?.aborted) {
+        this.csrf = ''
+        await this.connect()
+        throw { code: 'csrf-refused', message: '主机连接已更新；本次运行操作没有自动重发。' }
+      }
+      throw error
+    }
+  }
+
   async writeExport(destinationDirectory?: string, redactPaths = true): Promise<{ path: string; sha256: string }> {
     return this.call('export.write', { ...(destinationDirectory ? { destinationDirectory } : {}), redactPaths })
   }
