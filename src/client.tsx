@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { installBrowserBridge, type BrowserBridge } from './bridge.js'
 import { MissionControlClientStore } from './client-store.js'
+import { TaskExecutionPanel } from './execution/panel.js'
 import type { AuditEvent, Evidence, EvidenceStatus, EvidenceType, Priority, Task, TaskPhase } from './domain.js'
 import { bindExistingSession, createOpenBindSession, unbindSession } from './session-saga.js'
 
@@ -240,16 +241,16 @@ function Workbench() {
     if (task.phase === 'planning') return { label: '提交审批', hint: '计划准备好后，提交给 Owner 确认。', run: requestApproval }
     if (task.phase === 'awaiting-plan-approval') {
       if (activeApproval?.status === 'pending') return { label: '通过计划', hint: 'Owner 确认计划后，任务才能进入执行。', run: () => decide('approved') }
-      if (activeApproval?.status === 'approved') return { label: '进入待执行', hint: '审批已通过，把任务送入执行队列。', run: () => transition('ready') }
+      if (activeApproval?.status === 'approved') return { label: '进入待执行', hint: '只将手工记录改为待执行，不会自动发送任务。', run: () => transition('ready') }
       if (activeApproval?.status === 'rejected') return { label: '返回规划', hint: '根据 Owner 意见调整计划后重新提交。', run: () => transition('planning') }
       return { label: '提交审批', hint: '当前还没有有效的 Owner 审批请求。', run: requestApproval }
     }
-    if (task.phase === 'ready') return { label: '开始执行', hint: '计划已获批准，可以开始处理任务。', run: () => transition('executing') }
+    if (task.phase === 'ready') return { label: '标记为执行中', hint: '只更新手工记录。真实运行请使用上方“交给 DSH 执行”。', run: () => transition('executing') }
     if (task.phase === 'executing') return { label: '开始验证', hint: '执行完成后收集证据并进入验证。', run: () => transition('verifying') }
     if (task.phase === 'verifying') return { label: '提交复核', hint: '确认关键证据齐备，再提交复核。', run: () => transition('awaiting-review') }
     if (task.phase === 'awaiting-review') return { label: '交给 Owner', hint: '复核完成后交由 Owner 做最终确认。', run: () => transition('ready-for-owner') }
     if (task.phase === 'ready-for-owner') return { label: '确认完成', hint: 'Owner 确认目标与证据无误后关闭任务。', run: () => transition('done') }
-    if (task.phase === 'paused' || task.phase === 'blocked') return { label: '恢复任务', hint: '解除当前停滞状态，回到可继续推进的阶段。', run: () => transition(NEXT[task.phase][0]) }
+    if (task.phase === 'paused' || task.phase === 'blocked') return { label: '恢复手工流程', hint: '只修改任务记录，不重启或续跑 AI。', run: () => transition(NEXT[task.phase][0]) }
     return undefined
   })()
 
@@ -279,7 +280,7 @@ function Workbench() {
 
         <section className="mc-task-queue">
           <div className="mc-queue-head">
-            <h3>任务队列</h3>
+            <h3>任务列表</h3>
             <label>筛选：<select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value as typeof taskFilter)}><option value="all">全部</option><option value="open">进行中</option><option value="review">待处理</option></select></label>
             <label>排序：<select value={taskSort} onChange={(event) => setTaskSort(event.target.value as typeof taskSort)}><option value="recent">最新</option><option value="phase">阶段</option></select></label>
             {project && !narrow && <button className="mc-new-task" onClick={() => setAddingTask((value) => !value)}>＋</button>}
@@ -313,7 +314,8 @@ function Workbench() {
                     <div className="mc-task-identity"><span>任务 ID：{shortId(task.taskId)}</span>{!narrow && <button onClick={() => setEditing((value) => !value)}>{editing ? '收起编辑' : '编辑任务'}</button>}</div>
                   </header>
 
-                  <PhaseRail phase={task.phase} />
+                  <TaskExecutionPanel key={task.taskId} task={task} client={hostStore} hostReady={snapshot.phase === 'ready'} readOnly={narrow} onOpenSession={openSession} />
+                  <details className="mc-manual-workflow"><summary>手工流程记录（不控制实际运行）</summary><PhaseRail phase={task.phase} /></details>
 
                   {task.bindingRepair && <div className="mc-alert"><strong>会话绑定需要修复</strong><span>{task.bindingRepair.reason}</span>{task.bindingRepair.sessionId && !narrow && <button onClick={() => bind(task.bindingRepair!.sessionId!)}>重试绑定</button>}</div>}
 
@@ -377,10 +379,10 @@ function Workbench() {
                   </details>
                 </div>
 
-                <footer className="mc-next-action">
-                  <div><strong>{narrow ? '窄屏只读' : primaryAction ? '下一步行动' : task.phase === 'done' ? '任务已完成' : '当前没有可执行动作'}</strong><span>{narrow ? '可查看全部状态；请在桌面宽屏中执行修改与推进。' : primaryAction?.hint ?? (task.phase === 'done' ? '目标已由 Owner 确认完成，全部记录仍可查阅。' : `当前状态：${PHASE_LABEL[task.phase]}`)}</span></div>
+                <details className="mc-manual-actions"><summary>可选：手工流程与任务确认</summary><footer className="mc-next-action">
+                  <div><strong>{narrow ? '窄屏只读' : primaryAction ? '手工记录（不启动 AI）' : task.phase === 'done' ? '任务已完成' : '当前没有可执行动作'}</strong><span>{narrow ? '可查看全部状态；请在桌面宽屏中执行修改与推进。' : primaryAction?.hint ?? (task.phase === 'done' ? '目标已由 Owner 确认完成，全部记录仍可查阅。' : `当前状态：${PHASE_LABEL[task.phase]}`)}</span></div>
                   {primaryAction && <button className="mc-primary" onClick={primaryAction.run}>{primaryAction.label}<span>→</span></button>}
-                </footer>
+                </footer></details>
               </>
                 : <div className="mc-detail-empty"><strong>{taskFilter === 'all' ? '请选择或创建一项任务' : '筛选结果为空'}</strong><small>{taskFilter === 'all' ? '任务的目标、审批、证据与会话会集中显示在这里。' : '切换到“全部”继续查看任务。'}</small></div>}
         </article>
@@ -431,7 +433,7 @@ const CSS = `
 @keyframes mc-spin{to{transform:rotate(360deg)}}
 @media(max-width:1100px){.mc-panel{width:98vw}.mc-layout{grid-template-columns:185px 315px minmax(0,1fr)}.mc-task-strip{grid-template-columns:minmax(120px,1fr) 64px 38px 30px}.mc-task-meta.approval{display:none}.mc-topbar output{display:none}.mc-detail-grid{grid-template-columns:1fr}.mc-stage{font-size:11px;gap:5px}}
 @media(max-width:820px){.mc-backdrop{padding:8px}.mc-layout{grid-template-columns:155px 250px minmax(0,1fr)}.mc-connection span{display:none}.mc-task-strip{grid-template-columns:minmax(110px,1fr) 65px 30px}.mc-task-meta:nth-of-type(3){display:none}.mc-task-identity span{display:none}.mc-detail-scroll{padding:12px}.mc-inline-form>div{grid-template-columns:1fr 1fr}.mc-inline-form input{grid-column:1/-1}.mc-inline-form button{grid-column:2}.mc-phase-rail{padding-left:5px;padding-right:5px}.mc-stage span{font-size:10px}}
-@media(max-width:760px){.mc-backdrop{place-items:stretch;padding:0}.mc-panel{width:100vw;height:100vh;border:0;border-radius:0}.mc-topbar{height:auto;min-height:58px;flex-wrap:wrap;padding:9px 10px}.mc-topbar h2{font-size:17px}.mc-connection{order:3;width:100%}.mc-topbar output,.mc-top-action{display:none}.mc-layout{display:flex;flex-direction:column;overflow:auto}.mc-project-rail,.mc-task-queue{display:block;flex:0 0 auto;border-right:0;border-bottom:1px solid var(--mc-line)}.mc-section-head,.mc-queue-head{height:46px;min-height:46px}.mc-project-rail nav{display:flex;gap:6px;overflow-x:auto;padding:7px 10px}.mc-project-rail nav>button{width:auto;min-width:130px}.mc-project-rail footer,.mc-task-queue>footer,.mc-rail-empty{display:none}.mc-task-list{display:flex;gap:7px;overflow-x:auto;padding:8px 10px}.mc-task-strip{min-width:240px;margin:0;grid-template-columns:minmax(120px,1fr) 70px 30px}.mc-task-meta:nth-of-type(3),.mc-task-meta.approval{display:none}.mc-queue-empty{min-width:100%;min-height:90px}.mc-task-detail{min-height:520px;overflow:visible}.mc-detail-scroll{overflow:visible}.mc-task-titlebar h1{font-size:19px}.mc-task-identity{display:none}.mc-phase-rail{overflow-x:auto;grid-template-columns:repeat(5,minmax(90px,1fr))}.mc-phase-rail:before{left:45px;right:45px}.mc-detail-grid{grid-template-columns:1fr}.mc-next-action{position:sticky;bottom:0;min-height:76px;flex:0 0 auto}.mc-next-action>div>span{font-size:11px}.mc-primary{min-width:130px}.mc-spine-item{grid-template-columns:58px minmax(0,1fr)}}
+@media(max-width:760px){.mc-backdrop{place-items:stretch;padding:0}.mc-panel{width:100vw;height:100vh;border:0;border-radius:0}.mc-topbar{height:auto;min-height:58px;flex-wrap:wrap;padding:9px 10px}.mc-topbar h2{font-size:17px}.mc-connection{order:3;width:100%}.mc-topbar output,.mc-top-action{display:none}.mc-layout{display:flex;flex-direction:column;overflow:auto}.mc-project-rail,.mc-task-queue{display:block;flex:0 0 auto;border-right:0;border-bottom:1px solid var(--mc-line)}.mc-section-head,.mc-queue-head{height:46px;min-height:46px}.mc-project-rail nav{display:flex;gap:6px;overflow-x:auto;padding:7px 10px}.mc-project-rail nav>button{width:auto;min-width:130px}.mc-project-rail footer,.mc-task-queue>footer,.mc-rail-empty{display:none}.mc-task-list{display:flex;gap:7px;overflow-x:auto;padding:8px 10px}.mc-task-strip{min-width:240px;margin:0;grid-template-columns:minmax(120px,1fr) 70px 30px}.mc-task-meta:nth-of-type(3),.mc-task-meta.approval{display:none}.mc-queue-empty{min-width:100%;min-height:90px}.mc-task-detail{min-height:520px;flex-shrink:0;overflow:visible}.mc-detail-scroll{flex:0 0 auto;overflow:visible}.mc-task-titlebar h1{font-size:19px}.mc-task-identity{display:none}.mc-phase-rail{overflow-x:auto;grid-template-columns:repeat(5,minmax(90px,1fr))}.mc-phase-rail:before{left:45px;right:45px}.mc-detail-grid{grid-template-columns:1fr}.mc-next-action{position:sticky;bottom:0;min-height:76px;flex:0 0 auto}.mc-next-action>div>span{font-size:11px}.mc-primary{min-width:130px}.mc-spine-item{grid-template-columns:58px minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){.mc-loader{animation:none}}
 `
 

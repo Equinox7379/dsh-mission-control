@@ -1,6 +1,6 @@
 {
   "name": "dsh-mission-control",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -20,7 +20,8 @@
     "pack:built": "node scripts/pack-from-build.mjs",
     "sync-protocol": "node scripts/sync-desktop-protocol.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "node tests/health-browser-smoke.mjs"
+    "test:browser": "node tests/health-browser-smoke.mjs",
+    "test:execution-browser": "node tests/execution-browser-smoke.mjs"
   },
   "dsh": {
     "bundle": {

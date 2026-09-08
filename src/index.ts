@@ -2,6 +2,10 @@ import { isAbsolute, join } from 'node:path'
 import { createHostApi, missionControlRoutes } from './host-api.js'
 import { AtomicStateStore } from './storage.js'
 import { PROTOCOL_FINGERPRINT } from './rpc-contracts.js'
+import { TaskExecutionService } from './execution/runner.js'
+import { ExecutionFile } from './execution/store.js'
+import { createAlpha4ExecutionPort } from './execution/alpha4.js'
+import { executionApi } from './execution/http.js'
 
 export const inject: string[] = []
 
@@ -32,11 +36,19 @@ export async function apply(ctx: any): Promise<void> {
     const authority = `127.0.0.1:${port}`
     const exportDirectory = process.env.DSH_MISSION_CONTROL_EXPORT_DIR
       ?? join(process.env.USERPROFILE ?? home, 'Documents', 'DshMissionControlExports')
+    // Reuse the official host engine. The legacy task file and Desktop protocol are unchanged.
+    const execution = new TaskExecutionService(
+      store,
+      new ExecutionFile(join(home, 'storages', 'dsh-mission-control', 'execution-v1.json')),
+      createAlpha4ExecutionPort(scope, sessionController, home),
+    )
+    scope.effect(() => async () => { await execution.close() }, 'dsh-mission-control: execution observer')
     const api = createHostApi({
+      execution: executionApi(execution),
       store,
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
-      version: '0.1.1',
+      version: '0.2.0',
       certifiedDsh: '0.1.2-alpha.4',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,
