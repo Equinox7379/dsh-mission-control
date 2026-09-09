@@ -48,7 +48,7 @@ export async function apply(ctx: any): Promise<void> {
       store,
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
-      version: '0.2.0',
+      version: '0.2.1',
       certifiedDsh: '0.1.3-alpha.2',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,

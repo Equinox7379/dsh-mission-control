@@ -165,6 +165,6 @@ export function installBrowserBridge(ctx: any, ui: UiControl): BrowserBridge {
   }
   webview.addEventListener('message', onMessage)
   const deadline = setTimeout(() => { if (state.state === 'handshaking') state = { state: 'degraded', accepted: [], pending: 0, lastError: 'handshake.timeout' } }, 10_000)
-  post({ ...base, kind: 'request', id: requestId, name: 'bridge.handshake', payload: { pluginVersion: '0.2.0', protocolFingerprint: PROTOCOL_FINGERPRINT, certifiedDsh: { package: '@deepseek-ai/dsh', version: '0.1.3-alpha.2', sourceCommit: '82a5fd61a7cf5c293cec4bdff68f455398d685e9' }, capabilities: offered } })
+  post({ ...base, kind: 'request', id: requestId, name: 'bridge.handshake', payload: { pluginVersion: '0.2.1', protocolFingerprint: PROTOCOL_FINGERPRINT, certifiedDsh: { package: '@deepseek-ai/dsh', version: '0.1.3-alpha.2', sourceCommit: '82a5fd61a7cf5c293cec4bdff68f455398d685e9' }, capabilities: offered } })
   return { status: () => ({ ...state, accepted: [...state.accepted] }), dispose: () => { clearTimeout(deadline); controllers.forEach((item) => item.abort()); controllers.clear(); webview.removeEventListener('message', onMessage); state = { state: 'disposed', accepted: [], pending: 0 } } }
 }
