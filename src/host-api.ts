@@ -116,8 +116,8 @@ function page<T>(items: T[], offset: number, limit: number) {
 
 export function createHostApi(options: HostApiOptions) {
   const csrf = options.csrf ?? randomBytes(32).toString('base64url')
-  const pluginVersion = options.version ?? '0.2.0'
-  const certifiedDsh = options.certifiedDsh ?? '0.1.2-alpha.4'
+  const pluginVersion = options.version ?? '0.2.1'
+  const certifiedDsh = options.certifiedDsh ?? '0.1.3-alpha.2'
   const protocolFingerprint = options.protocolFingerprint ?? 'unknown'
 
   const guardBase = (req: IncomingMessage, originRequired: boolean): string | null => {

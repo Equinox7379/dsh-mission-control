@@ -7,7 +7,7 @@ const state = (revision) => ({ schemaVersion: 1, revision, projects: {}, tasks: 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const success = (request, result) => json({ v: 1, requestId: request.requestId, ok: true, result })
 const failure = (request, code, message, status = 400) => json({ v: 1, requestId: request.requestId, ok: false, error: { code, message } }, status)
-const health = () => json({ ok: true, pluginVersion: '0.1.1', protocolFingerprint: fingerprint, certifiedDsh: '0.1.2-alpha.4', storage: 'ready' })
+const health = () => json({ ok: true, pluginVersion: '0.1.1', protocolFingerprint: fingerprint, certifiedDsh: '0.1.3-alpha.2', storage: 'ready' })
 
 test('connect uses a browser-owned same-origin health GET before the API handshake', async () => {
   const originalFetch = globalThis.fetch

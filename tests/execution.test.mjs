@@ -8,7 +8,7 @@ import { ExecutionFile } from '../lib/execution/store.js'
 import { foldExecution, replayExecution } from '../lib/execution/fold.js'
 import { buildTaskPrompt } from '../lib/execution/prompt.js'
 import { executionApi } from '../lib/execution/http.js'
-import { createAlpha4ExecutionPort } from '../lib/execution/alpha4.js'
+import { createDsh013ExecutionPort } from '../lib/execution/dsh013.js'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
@@ -161,25 +161,25 @@ test('oversized goals fail before sending and closed tasks cannot start',async()
   f.task.objective='goal';f.task.phase='done';await assert.rejects(f.service.preview('task-one'));assert.equal(f.calls.length,0);await f.service.close()
 })
 
-test('alpha.4 adapter calls official prompt exactly and removes only our inbox item',async()=>{
+test('DSH 0.1.3 adapter calls official prompt exactly and removes only our inbox item',async()=>{
   let handler, sent, removed, cancelled=0
   const agent={id:'session-one',status:'idle',session:{header:{id:'session-one',cwd:'/work'},snapshotEvents:()=>[]},inbox:{nextTurn:[],nextStep:[]}}
   const controller={inspect:async()=>({meta:agent.session.header,events:[]}),resolveAgent:async()=>({agent}),
     prompt:async(req)=>{sent=req;return {accepted:true}},cancel:()=>{cancelled++;return{accepted:true}},updateQueue:req=>{removed=req;return{accepted:true}}}
   const ctx={agents:{get:()=>agent},on:(_name,cb)=>{handler=cb;return()=>{}},workspaceRegistry:{list:()=>[]},agentDefaultModel:{currentSelection:()=>({provider:'provider',model:'model'})}}
-  const port=createAlpha4ExecutionPort(ctx,controller);assert.equal(port.capable(),true)
+  const port=createDsh013ExecutionPort(ctx,controller);assert.equal(port.capable(),true)
   await port.prepare('session-one');await port.send('session-one','rpc-one','payload',{baseSeq:-1,cwd:'/work'})
   assert.deepEqual(sent,{sessionId:'session-one',requestId:'rpc-one',mode:'queue',content:[{type:'text',text:'payload'}]})
   agent.inbox.nextTurn=[{id:'m-other',source:{kind:'user',rpcId:'other'}},{id:'m-own',source:{kind:'user',rpcId:'rpc-one'}}]
   assert.equal(await port.stop({sessionId:'session-one',requestId:'rpc-one'}),'queue-removed')
   assert.equal(removed.itemId,'m-own');assert.equal(cancelled,0)
 })
-test('alpha.4 adapter refuses cancel after another human instruction or turn completion',async()=>{
+test('DSH 0.1.3 adapter refuses cancel after another human instruction or turn completion',async()=>{
   let cancelled=0
   const events=[{seq:0,type:'turn/start',data:{turn:2}},{seq:1,type:'user/message',data:{source:{kind:'user',rpcId:'rpc-one'}}}]
   const agent={status:'running',session:{snapshotEvents:()=>events},inbox:{nextTurn:[],nextStep:[]}}
   const controller={cancel:()=>{cancelled++},inspect:async()=>({}),resolveAgent:async()=>({agent}),prompt(){},updateQueue(){}}
-  const port=createAlpha4ExecutionPort({agents:{get:()=>agent},on:()=>()=>{}},controller)
+  const port=createDsh013ExecutionPort({agents:{get:()=>agent},on:()=>()=>{}},controller)
   await port.stop({sessionId:'s',requestId:'rpc-one',turn:2});assert.equal(cancelled,1)
   events.push({seq:2,type:'user/message',data:{source:{kind:'user',rpcId:'other'}}})
   await assert.rejects(port.stop({sessionId:'s',requestId:'rpc-one',turn:2}));assert.equal(cancelled,1)
@@ -219,13 +219,13 @@ test('alpha.4 admission guard rejects a raced session before prompt dispatch',as
   let calls=0
   const agent={id:'session-one',status:'running',session:{header:{cwd:'/work'},snapshotEvents:()=>[]},inbox:{nextTurn:[],nextStep:[]}}
   const controller={inspect(){},resolveAgent(){},prompt:()=>{calls++;return{accepted:true}},cancel(){},updateQueue(){}}
-  const port=createAlpha4ExecutionPort({agents:{get:()=>agent},on:()=>()=>{}},controller)
+  const port=createDsh013ExecutionPort({agents:{get:()=>agent},on:()=>()=>{}},controller)
   await assert.rejects(port.send('session-one','rpc-one','text',{baseSeq:-1,cwd:'/work'}),e=>e.code==='execution.changed-before-send')
   assert.equal(calls,0)
 })
 test('alpha.4 preview refuses the DSH data/profile directory as a project workspace',async()=>{
   const controller={inspect:async()=>({meta:{id:'s',cwd:'C:\\Users\\u\\.dsh\\profiles\\web'},events:[]})}
-  const port=createAlpha4ExecutionPort({agents:{get:()=>undefined}},controller,'C:\\Users\\u\\.dsh')
+  const port=createDsh013ExecutionPort({agents:{get:()=>undefined}},controller,'C:\\Users\\u\\.dsh')
   await assert.rejects(port.probe('s'),e=>e.code==='execution.protected-workspace')
 })
 test('task mutation during admission-record persistence is rejected before the external call',async()=>{
@@ -254,7 +254,7 @@ test('new-session default model changes invalidate preview, preparation and fina
     const changed=()=>{selection={...selection,model:stage==='persist'?'model-A':'model-B',reasoningEffort:'high'}}
     const controller={inspect:async()=>({meta:agent.session.header,events:[]}),resolveAgent:async()=>{if(stage==='prepare')changed();return{agent}},
       prompt:async(request)=>{f.calls.push(request);return{accepted:true}},cancel(){},updateQueue(){}}
-    Object.assign(f.port,createAlpha4ExecutionPort({agents:{get:()=>agent},agentDefaultModel:{currentSelection:()=>selection},on:()=>()=>{}},controller))
+    Object.assign(f.port,createDsh013ExecutionPort({agents:{get:()=>agent},agentDefaultModel:{currentSelection:()=>selection},on:()=>()=>{}},controller))
     const preview=await f.service.preview('task-one');assert.equal(preview.model,'provider / model-A · low')
     if(stage==='preview')changed()
     if(stage==='persist'){
@@ -271,7 +271,7 @@ test('cold model preview preserves an unconsumed selection over other request he
     {seq:1,type:'request/header',data:{header:{config:{provider:'p',model:'previous'}}}}]
   let resumed=0
   const controller={inspect:async()=>({meta:{id:'s',cwd:'/work'},events}),resolveAgent:async()=>{resumed++}}
-  const port=createAlpha4ExecutionPort({agents:{get:()=>undefined},agentDefaultModel:{currentSelection:()=>({provider:'p',model:'default'})}},controller)
+  const port=createDsh013ExecutionPort({agents:{get:()=>undefined},agentDefaultModel:{currentSelection:()=>({provider:'p',model:'default'})}},controller)
   assert.equal((await port.probe('s')).model,'p / chosen · high')
   events.push({seq:2,type:'request/header',data:{header:{config:{provider:'p',model:'chosen',reasoningEffort:'high'}}}})
   assert.equal((await port.probe('s')).model,'p / chosen · high');assert.equal(resumed,0)
@@ -294,7 +294,7 @@ test('adapter initializes inside a real Cordis scope without requiring optional 
   try{
     await root.inject(['sessionController'],scope=>{
       assert.throws(()=>scope.agents,/without inject/,'This must exercise the real framework boundary')
-      port=createAlpha4ExecutionPort(scope,scope.sessionController)
+      port=createDsh013ExecutionPort(scope,scope.sessionController)
       dispose=port.subscribe(()=>{})
     })
     assert.equal(port.capable(),true)
