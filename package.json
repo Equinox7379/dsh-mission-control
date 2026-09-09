@@ -1,6 +1,20 @@
 {
   "name": "dsh-mission-control",
   "version": "0.2.1",
+  "description": "A local task console for DeepSeek Harness: plan work, run bound AI sessions, and track results with human review.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Equinox7379/dsh-mission-control.git"
+  },
+  "homepage": "https://github.com/Equinox7379/dsh-mission-control#readme",
+  "bugs": {
+    "url": "https://github.com/Equinox7379/dsh-mission-control/issues"
+  },
+  "keywords": ["deepseek", "dsh", "ai-agents", "mission-control", "task-management", "local-first"],
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {

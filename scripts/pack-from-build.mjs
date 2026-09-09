@@ -20,6 +20,8 @@ await mkdir(destinationDir, { recursive: true })
 await cp(libDir, join(stageDir, 'lib'), { recursive: true, dereference: true })
 await cp(join(root, 'protocol-vendor'), join(stageDir, 'protocol-vendor'), { recursive: true })
 await cp(join(root, 'cordis.patch.yml'), join(stageDir, 'cordis.patch.yml'))
+await cp(join(root, 'README.md'), join(stageDir, 'README.md'))
+await cp(join(root, 'LICENSE'), join(stageDir, 'LICENSE'))
 
 const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 delete packageJson.devDependencies
