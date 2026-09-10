@@ -49,7 +49,7 @@ export async function apply(ctx: any): Promise<void> {
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
       version: '0.2.1',
-      certifiedDsh: '0.1.3-alpha.2',
+      certifiedDsh: '0.1.5-rc.1',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,
       validateSession: async (sessionId, signal) => {

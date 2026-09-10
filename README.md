@@ -30,7 +30,7 @@ Mission Control uses DSH's existing session engine and configured model. It does
 | Component | Current support |
 | --- | --- |
 | Mission Control | `0.2.1` |
-| DSH runtime | **`0.1.3-alpha.2`** — the peer dependencies are pinned to this version |
+| DSH runtime | **`0.1.5-rc.1`** — the peer dependencies are pinned to this version |
 | Node.js | 22 or newer; CI runs on Node 22, local verification also uses Node 24 |
 | Package manager | pnpm 11 |
 | Verified platform | Windows; the CI workflow builds and tests on `windows-latest` |
@@ -130,7 +130,7 @@ Focused fixes and concrete workflow suggestions are welcome. For a larger featur
 
 在项目中建立任务，写明目标与验收标准，绑定一个已有的 DSH 会话；确认工作目录、模型和待发送内容后，再交给 DSH 执行。执行输出、工具调用和任务状态集中显示，模型回合结束与人工验收保持分开。
 
-当前版本为 `0.2.1`，适配 **DSH `0.1.3-alpha.2`**，采用中文界面，已在 Windows 验证。普通浏览器即可使用任务界面，Desktop Bridge 是可选集成；窄屏仅供查看。
+当前版本为 `0.2.1`，适配 **DSH `0.1.5-rc.1`**，采用中文界面，已在 Windows 验证。普通浏览器即可使用任务界面，Desktop Bridge 是可选集成；窄屏仅供查看。
 
 安装时先按上面的步骤克隆并构建，再使用绝对路径添加到 DSH Web profile，重启后打开「任务指挥台」。源代码仓库不包含生成的 `lib/`，因此不要跳过构建直接安装 GitHub 源码地址。
 
