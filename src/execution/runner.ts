@@ -9,7 +9,7 @@ import {
 } from './types.js'
 
 const sameProbe = (a: SessionProbe, b: SessionProbe) => a.sessionId === b.sessionId && a.cwd === b.cwd && a.model === b.model && a.modelIdentity === b.modelIdentity && a.lastSeq === b.lastSeq
-const DEFINITE_PRE_ADMISSION = new Set(['execution.changed-before-send','execution.prepare-failed','execution.model-unavailable','session/model-unavailable', 'session/not-found', 'session/invalid-time-zone', 'session/attachment-invalid'])
+const DEFINITE_PRE_ADMISSION = new Set(['execution.changed-before-send','execution.prepare-failed','execution.model-unavailable','execution.team-busy','execution.team-unavailable','session/model-unavailable', 'session/not-found', 'session/invalid-time-zone', 'session/attachment-invalid'])
 
 /** One active MC run per host. Calls DSH once; never interprets a network timeout as permission to resend. */
 export class TaskExecutionService {
@@ -99,6 +99,15 @@ export class TaskExecutionService {
     if (!project) throw new ExecutionError('execution.project-missing', '项目不存在。')
     if (project.workspaceId && project.workspaceId !== probe.workspaceId) throw new ExecutionError('execution.workspace-mismatch', '任务项目与会话工作区不一致，未发送。')
     if (probe.running || probe.queued > 0) throw new ExecutionError('execution.session-busy', '该会话正在执行或有排队消息，请先在原会话处理。')
+    if (probe.team?.state === 'unavailable') throw new ExecutionError('execution.team-unavailable', '暂时无法读取团队状态，请打开原会话核对 Teams 后再试。')
+    if (probe.team?.busy) throw new ExecutionError('execution.team-busy', '该会话的团队仍在运行、创建队友或有待处理消息，请等团队空闲后再发送。')
+  }
+  private busyRun(): ExecutionRun | undefined {
+    return Object.values(this.state.runs).find(run => {
+      if (isActive(run)) return true
+      const team = this.port.team(run.sessionId)
+      return team?.busy || team?.state === 'unavailable'
+    })
   }
   private async saveRun(run: ExecutionRun) {
     const next: ExecutionState = { version: 1, runs: { ...this.state.runs, [run.taskId]: structuredClone(run) } }
@@ -135,7 +144,7 @@ export class TaskExecutionService {
       // Same user intent returns the original result, even when the first HTTP response was lost.
       const repeated = Object.values(this.state.runs).find(r => r.intentId === intentId)
       if (repeated) return structuredClone(repeated)
-      if (Object.values(this.state.runs).some(isActive)) throw new ExecutionError('execution.busy', '指挥台已有运行或未确认的启动，请先处理该运行。')
+      if (this.busyRun()) throw new ExecutionError('execution.busy', '指挥台已有运行、仍忙的团队或未确认状态，请先处理原会话。')
       const preview = this.previews.get(previewId)
       if (!preview || preview.public.expiresAt < this.now()) throw new ExecutionError('execution.preview-expired', '预览已失效，请重新查看将发送的内容。')
       const task = this.task(preview.task.taskId)
@@ -198,7 +207,7 @@ export class TaskExecutionService {
         const definite = DEFINITE_PRE_ADMISSION.has(String(error?.code ?? ''))
         await this.saveRun({ ...current, status: definite ? 'failed' : 'unconfirmed',
           activity: definite ? '本次启动未被接受' : '启动结果未确认',
-          reason: definite ? '任务、会话或模型配置已变化，请重新核对后启动。' : '请求可能已被接收，不会自动重发，请核对原会话。',
+          reason: definite ? (error instanceof ExecutionError ? error.message : '任务、会话或模型配置已变化，请重新核对后启动。') : '请求可能已被接收，不会自动重发，请核对原会话。',
           ...(definite ? { finishedAt: this.now() } : {}), updatedAt: this.now() })
       }).catch(() => { this.fault = '运行状态保存失败，请查看原会话。' })
     } finally { clearTimeout(timer); this.timers.delete(timer); this.inflight.delete(run.runId) }
@@ -226,9 +235,11 @@ export class TaskExecutionService {
           }
         } catch { /* Existing status remains; no destructive recovery or re-send. */ }
       }
-      const active = Object.values(this.state.runs).find(isActive)
+      const active = this.busyRun()
+      const sessionId = run?.sessionId ?? this.tasks.snapshot().tasks[taskId]?.sessionBinding?.sessionId
+      const team = sessionId ? this.port.team(sessionId) : undefined
       return { enabled: !this.closed && !this.fault && this.port.capable(), ...(run ? { run: structuredClone(run) } : {}),
-        ...(active ? { activeTaskId: active.taskId } : {}), ...(this.fault ? { notice: this.fault } : {}) }
+        ...(team ? { team } : {}), ...(active ? { activeTaskId: active.taskId } : {}), ...(this.fault ? { notice: this.fault } : {}) }
     })
   }
 
@@ -273,7 +284,7 @@ export class TaskExecutionService {
       const run = this.state.runs[taskId]
       if (!run || run.runId !== runId || !['unconfirmed','detached'].includes(run.status)) throw new ExecutionError('execution.arguments', '仅可人工确认未确认的运行。')
       const probe = await this.port.probe(run.sessionId)
-      if (probe.running || probe.queued || this.inflight.has(run.runId)) throw new ExecutionError('execution.still-active', '原会话或本次接收请求仍未结束，不能解除占用。')
+      if (probe.running || probe.queued || probe.team?.busy || probe.team?.state === 'unavailable' || this.inflight.has(run.runId)) throw new ExecutionError('execution.still-active', '原会话、团队或本次接收请求仍未结束或未确认，不能解除占用。')
       const next = { ...run, releasedAt: this.now(), updatedAt: this.now(), activity: '已由用户核对并解除指挥台占用；没有重新执行' }
       await this.saveRun(next); return structuredClone(next)
     })

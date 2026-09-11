@@ -11,6 +11,7 @@ const LABEL: Record<ExecutionRun['status'], string> = {
   unconfirmed:'需要核对', detached:'会话另有操作',
 }
 const BUSY = new Set(['dispatching','accepted','running','stopping','unconfirmed','detached'])
+const MEMBER_LABEL = { running:'运行中', idle:'空闲', inactive:'未运行', provisioning:'创建中', failed:'创建失败' }
 const messageOf = (error: any) => typeof error?.message === 'string' ? error.message.slice(0, 400) : '暂时无法取得运行状态，请查看原会话。'
 
 /** A real run surface. Legacy phase/approval remains separately labelled human workflow. */
@@ -42,13 +43,13 @@ export function TaskExecutionPanel({ task, client, hostReady, readOnly, onOpenSe
         if (controller.signal.aborted) return
         const live = next?.run && BUSY.has(next.run.status) && !next.run.releasedAt
         const waiting = !next?.run && uncertainUntil.current > Date.now()
-        if (live || waiting) timer = setTimeout(poll, document.hidden ? 5000 : 1500)
+        if (live || waiting || next?.team || next?.activeTaskId) timer = setTimeout(poll, document.hidden || (!live && !next?.team?.busy) ? 5000 : 1500)
         else if (!next?.run && uncertainUntil.current) setMessage('没有取得本次启动记录。不会自动重发，请先打开原会话核对。')
       } catch (error) { if (!controller.signal.aborted) setMessage(messageOf(error)) }
     }
     void poll()
     return () => { controller.abort(); if (timer) clearTimeout(timer); sequence.current++ }
-  }, [task.taskId, client, hostReady, observeEpoch])
+  }, [task.taskId, task.sessionBinding?.sessionId, client, hostReady, observeEpoch])
   useEffect(() => { setPreview(undefined) }, [task.revision, task.sessionBinding?.sessionId])
 
   const prepare = async () => {
@@ -85,6 +86,9 @@ export function TaskExecutionPanel({ task, client, hostReady, readOnly, onOpenSe
     finally { setWorking(false) }
   }
   const run = view?.run
+  const team = view?.team
+  const teamBlocked = !!team?.busy || team?.state === 'unavailable'
+  const showTeam = team && (team.state !== 'live' || team.members.some(member => member.role === 'teammate') || team.pendingMessages > 0)
   const active = !!run && BUSY.has(run.status) && !run.releasedAt
   const otherBusy = !!view?.activeTaskId && view.activeTaskId !== task.taskId
   const closed = ['done','failed','cancelled'].includes(task.phase)
@@ -92,11 +96,24 @@ export function TaskExecutionPanel({ task, client, hostReady, readOnly, onOpenSe
   const sessionId = run?.sessionId ?? bound
   return <section className="mc-execution" data-testid="mc-execution">
     <style>{EXECUTION_CSS}</style>
-    <header><div><small>真实运行 · DSH</small><h3>把目标交给 AI</h3></div><strong role="status">{run ? LABEL[run.status] : '尚未启动'}</strong></header>
+    <header><div><small>真实运行 · DSH</small><h3>把目标交给 AI</h3></div><strong role="status">{run ? LABEL[run.status] : '尚未启动'}{run && !active && team?.busy ? ' · 团队仍忙' : ''}</strong></header>
     {!run && <p>任务目标、验收要求和已有计划会自动带入会话。不必先填写审批流程。</p>}
     {!bound && <p className="mc-execution-note">请先在下方“会话工具”选择一个已配置工作目录和模型的会话。不会猜测项目目录或自动启动生产服务。</p>}
-    {otherBusy && <p className="mc-execution-note">指挥台还有另一项运行或未确认的启动，本版不并行发送任务。</p>}
+    {otherBusy && <p className="mc-execution-note">指挥台另一项任务的会话或团队仍忙，或状态尚未确认，请先处理该任务。</p>}
     {view?.notice && <p role="alert">{view.notice}</p>}
+    {showTeam && <div className="mc-execution-team" data-testid="mc-execution-team">
+      <h4>会话团队 · Teams</h4>
+      <p aria-live="polite">{team.state === 'unavailable' ? '暂时无法读取团队状态，发送已暂停。' : team.state === 'inactive' ? '主会话尚未运行；发送前会重新核对团队状态。' : team.busy ? '团队仍忙，暂不派发新任务。' : '团队当前空闲，任务是否达标仍由你确认。'}</p>
+      {team.members.length > 0 && <ul>{team.members.map(member => <li key={member.id}>
+        {member.role === 'lead' ? '主助手' : member.name} · {MEMBER_LABEL[member.status]}{member.queued > 0 ? ` · ${member.queued} 条排队消息` : ''}
+      </li>)}</ul>}
+      {team.pendingMessages > 0 && <p>{team.pendingMessages} 条团队消息待投递，请在原会话核对。</p>}
+      <div className="mc-execution-actions">
+        <button type="button" onClick={() => { void Promise.resolve().then(() => onOpenSession(team.sessionId)).catch(error => setMessage(messageOf(error))) }}>在会话中查看 Teams</button>
+        <button type="button" onClick={observeAfterAction} disabled={working}>刷新团队状态</button>
+      </div>
+      <small>打开会话后点击顶部 Agent Team，查看共享任务和队友会话。后续团队消息与汇总也在原会话中查看。</small>
+    </div>}
     {run && <>
       <p className="mc-execution-activity" aria-live="polite">{run.activity}</p>
       <dl><dt>工作目录</dt><dd>{run.cwd}</dd><dt>模型</dt><dd>{run.model}</dd></dl>
@@ -111,17 +128,17 @@ export function TaskExecutionPanel({ task, client, hostReady, readOnly, onOpenSe
     {preview && <div className="mc-execution-preview">
       <h4>确认这次执行</h4><dl><dt>工作目录</dt><dd>{preview.cwd}</dd><dt>模型</dt><dd>{preview.model}</dd></dl>
       <p>{preview.warning}</p><details><summary>查看即将发送的完整指令</summary><pre>{preview.prompt}</pre></details>
-      <div className="mc-execution-actions"><button type="button" onClick={start} disabled={working || readOnly} className="mc-execution-start">确认发送一次</button><button type="button" onClick={() => setPreview(undefined)} disabled={working}>返回</button></div>
+      <div className="mc-execution-actions"><button type="button" onClick={start} disabled={working || readOnly || teamBlocked || otherBusy} className="mc-execution-start">确认发送一次</button><button type="button" onClick={() => setPreview(undefined)} disabled={working}>返回</button></div>
     </div>}
     <div className="mc-execution-actions">
-      {!preview && !active && !uncertain && <button type="button" className="mc-execution-start" onClick={prepare} disabled={working || readOnly || !hostReady || !bound || otherBusy || closed || view?.enabled === false}>交给 DSH 执行</button>}
-      {active && !['unconfirmed','detached'].includes(run!.status) && <button type="button" onClick={stop} disabled={working || readOnly || !!run?.stopRequestedAt}>停止本轮</button>}
+      {!preview && !active && !uncertain && <button type="button" className="mc-execution-start" onClick={prepare} disabled={working || readOnly || !hostReady || !bound || otherBusy || teamBlocked || closed || view?.enabled === false}>交给 DSH 执行</button>}
+      {active && !['unconfirmed','detached'].includes(run!.status) && <button type="button" onClick={stop} disabled={working || readOnly || !!run?.stopRequestedAt}>停止主助手本轮</button>}
       {sessionId && <button type="button" onClick={() => { void Promise.resolve().then(() => onOpenSession(sessionId)).catch(error => setMessage(messageOf(error))) }}>打开对应会话</button>}
       {(uncertain || message) && <button type="button" onClick={() => { void refresh().catch(error => setMessage(messageOf(error))) }} disabled={working}>查询本次启动</button>}
       {run && ['unconfirmed','detached'].includes(run.status) && !run.releasedAt && <button type="button" onClick={acknowledge} disabled={working || readOnly}>我已核对，解除占用</button>}
     </div>
     {message && <p className="mc-execution-note" role="alert">{message}</p>}
-    <small>关闭工作台不会停止 DSH。停止仅针对本轮请求或回合，不承诺终止外部后台进程；权限请求请在原会话处理。</small>
+    <small>关闭工作台不会停止 DSH。“停止主助手本轮”只取消本次主助手请求或回合，队友可能继续工作；请在原会话让主助手处理队友的中断或后续指令。外部后台进程与权限请求也请在原会话处理。</small>
   </section>
 }
 
@@ -142,6 +159,8 @@ const EXECUTION_CSS = `
 .mc-execution-actions button{padding:8px 11px;border:1px solid var(--mc-line,#303841);background:transparent;color:inherit;border-radius:3px;min-height:36px}
 .mc-execution-actions .mc-execution-start{border-color:var(--mc-teal,#62b6b1);color:var(--mc-teal,#62b6b1)}
 .mc-execution-preview{margin-top:14px;padding:14px;background:var(--mc-rail,#12171d);border:1px solid var(--mc-line,#303841)}
+.mc-execution-team{margin-top:12px;padding:12px;border-left:2px solid var(--mc-teal,#62b6b1);background:var(--mc-rail,#12171d)}
+.mc-execution-team small{font-size:12px;color:var(--mc-muted,#9ba4ac);line-height:1.7}
 .mc-execution li{margin:5px 0;font-size:12px;overflow-wrap:anywhere}
 @media(max-width:760px){.mc-execution{padding:14px 0}.mc-execution header{display:block}.mc-execution dl{grid-template-columns:1fr;gap:3px}}
 @media(prefers-reduced-motion:reduce){.mc-execution *{transition:none!important}}

@@ -14,6 +14,13 @@ export interface DshEvent { type: string; seq: number; time: number; data: any }
 export interface SessionProbe {
   sessionId: string; cwd: string; model: string; running: boolean; queued: number
   lastSeq: number; origin?: string; workspaceId?: string; modelIdentity?: string
+  team?: ExecutionTeam
+}
+/** Live official Team observation, never a second task board or persisted run result. */
+export interface ExecutionTeam {
+  sessionId: string; state: 'live' | 'inactive' | 'unavailable'; busy: boolean; pendingMessages: number
+  members: { id: string; name: string; role: 'lead' | 'teammate';
+    status: 'running' | 'idle' | 'inactive' | 'provisioning' | 'failed'; queued: number }[]
 }
 export interface ToolObservation {
   callId: string; name: string; callSeq: number; resultSeq?: number; status: 'requested' | 'returned' | 'error'
@@ -34,10 +41,13 @@ export interface ExecutionPreview {
 }
 export interface ExecutionView {
   enabled: boolean; run?: ExecutionRun; activeTaskId?: string; notice?: string
+  team?: ExecutionTeam
 }
 export interface ExecutionRepository { load(): Promise<ExecutionState>; save(state: ExecutionState): Promise<void> }
 export interface DshExecutionPort {
   capable(): boolean
+  /** Read without resuming the Lead or any teammate; absent when Teams is not installed. */
+  team(sessionId: string): ExecutionTeam | undefined
   /** Cold-safe preview. */
   probe(sessionId: string): Promise<SessionProbe>
   /** Explicitly resume the selected agent, never change its model or permission policy. */

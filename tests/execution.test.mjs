@@ -27,7 +27,7 @@ function fixture(saved) {
   const live = { sessionId:'session-one', cwd:'/workspace/demo', model:'provider / model', running:false, queued:0,lastSeq:-1 }
   const calls = [], events = []
   const port = {
-    capable:()=>true, probe:async()=>({...live}), prepare:async()=>({...live}), inspect:async()=>({events: [...events]}),
+    capable:()=>true, team:()=>live.team, probe:async()=>({...live}), prepare:async()=>({...live}), inspect:async()=>({events: [...events]}),
     send:async(...args)=>{ calls.push(args);return {accepted:true} },
     stop:async()=> 'requested', subscribe:fn=>{ callback=fn;return()=>{callback=undefined} },
   }
@@ -84,6 +84,80 @@ test('an official completed turn produces a model-labelled summary, not a test P
   assert.match(run.output,/模型称/);assert.equal(run.outputSeq,4)
   assert.ok(!JSON.stringify(run).includes('PRIVATE RAW ARGUMENT'));assert.equal(f.task.phase,'draft')
   await f.service.close()
+})
+test('a completed Lead turn keeps its busy Team visible and blocks the next task until idle',async()=>{
+  const f=fixture();const r=await f.begin()
+  f.live.team={sessionId:'session-one',state:'live',busy:true,pendingMessages:0,members:[{id:'child',name:'writer',role:'teammate',status:'running',queued:0}]}
+  f.emit('turn/start',{turn:1});f.emit('user/message',{source:{kind:'user',rpcId:r.requestId}})
+  f.emit('turn/end',{turn:1,reason:{kind:'completed'}})
+  const view=await f.service.status('task-one')
+  assert.equal(view.run.status,'completed');assert.equal(view.team.busy,true);assert.equal(view.activeTaskId,'task-one')
+  assert.equal(f.task.phase,'draft')
+  await assert.rejects(f.service.preview('task-one'),e=>e.code==='execution.team-busy')
+  const second={...f.task,taskId:'task-two',sessionBinding:{sessionId:'session-two'}}
+  f.source.snapshot=()=>({tasks:{'task-one':f.task,'task-two':second},projects:{'project-one':{title:'p'}}})
+  f.port.probe=async id=>id==='session-two'?{...f.live,sessionId:id,team:undefined}:{...f.live}
+  const preview=await f.service.preview('task-two')
+  await assert.rejects(f.service.start(preview.previewId,'intent-two'),e=>e.code==='execution.busy')
+  f.live.team={...f.live.team,busy:false,members:[{...f.live.team.members[0],status:'idle'}]}
+  const idle=await f.service.status('task-one')
+  assert.equal(idle.team.busy,false);assert.equal(idle.activeTaskId,undefined);assert.equal(idle.run.status,'completed')
+  assert.equal(f.calls.length,1);await f.service.close()
+})
+test('Teams becoming busy or unreadable during preview, preparation or persistence never admits a prompt',async()=>{
+  for(const stage of ['preview','prepare','persist'])for(const state of ['busy','unavailable']){
+    const f=fixture();const events=[]
+    const lead={id:'session-one',status:'idle',session:{header:{id:'session-one',cwd:'/workspace/demo'},snapshotEvents:()=>events},inbox:{nextTurn:[],nextStep:[]}}
+    const child={id:'child',status:'idle',inbox:{nextTurn:[],nextStep:[]}}
+    const members=[{id:lead.id,name:'lead',role:'lead',status:'idle'},{id:child.id,name:'writer',role:'teammate',status:'idle'}]
+    let unreadable=false
+    const changed=()=>{if(state==='unavailable')unreadable=true;else members[1].status='running'}
+    const teams={membership:()=>({role:'lead',root:lead,id:lead.id}),listMembers:()=>{if(unreadable)throw new Error('Team disposed');return members}}
+    const controller={inspect:async()=>({meta:lead.session.header,events}),resolveAgent:async()=>{if(stage==='prepare')changed();return{agent:lead}},
+      prompt:async request=>{f.calls.push(request);return{accepted:true}},cancel(){},updateQueue(){}}
+    Object.assign(f.port,createDsh013ExecutionPort({agents:{get:id=>id===lead.id?lead:id===child.id?child:undefined},agentTeams:teams,
+      agentDefaultModel:{currentSelection:()=>({provider:'p',model:'m'})},on:()=>()=>{}},controller))
+    const preview=await f.service.preview('task-one')
+    if(stage==='preview')changed()
+    if(stage==='persist'){
+      const save=f.repo.save.bind(f.repo);f.repo.save=async value=>{await save(value);if(value.runs['task-one']?.status==='dispatching')changed()}
+      await f.service.start(preview.previewId,'intent-one');await tick()
+      const {run}=await f.service.status('task-one');assert.equal(run.status,'failed');assert.match(run.reason,/团队/)
+    }else await assert.rejects(f.service.start(preview.previewId,'intent-one'),e=>['execution.team-busy','execution.team-unavailable'].includes(e.code))
+    assert.equal(f.calls.length,0,`${stage} ${state}`);await f.service.close()
+  }
+})
+test('Team observation includes provisioning, member inboxes and undelivered official messages without waking cold sessions',async()=>{
+  let resumed=0,cancelled=0,interrupted=0,liveLead=true
+  const events=[]
+  const lead={id:'s',status:'idle',session:{header:{id:'s',cwd:'/work'},snapshotEvents:()=>events},inbox:{nextTurn:[],nextStep:[]}}
+  const child={id:'child',status:'idle',inbox:{nextTurn:[],nextStep:[]}}
+  const members=[{id:'s',name:'lead',role:'lead',status:'idle'},{id:'child',name:'writer',role:'teammate',status:'idle'}]
+  const teams={membership:()=>({role:'lead',root:lead,id:'s'}),listMembers:()=>members,interrupt:()=>{interrupted++}}
+  const controller={inspect:async()=>({meta:lead.session.header,events}),resolveAgent:async()=>{resumed++;return{agent:lead}},cancel:()=>{cancelled++}}
+  const port=createDsh013ExecutionPort({agents:{get:id=>id==='s'?(liveLead?lead:undefined):id==='child'?child:undefined},agentTeams:teams},controller)
+  assert.equal(port.team('s').busy,false)
+  members[1].status='provisioning';assert.equal(port.team('s').busy,true)
+  members[1].status='idle';child.inbox.nextStep=[{id:'queued',source:{kind:'team-message'}}]
+  assert.equal(port.team('s').members[1].queued,1);assert.equal(port.team('s').busy,true)
+  child.inbox.nextStep=[];events.push({type:'team/message/queued',data:{teamId:'s',message:{id:'pending',content:'PRIVATE'}}})
+  assert.equal(port.team('s').pendingMessages,1);assert.equal(port.team('s').busy,true)
+  assert.ok(!JSON.stringify(port.team('s')).includes('PRIVATE'))
+  events.push({type:'team/message/queued',data:{teamId:'foreign',message:{id:'ignored'}}})
+  events.push({type:'team/message/delivered',data:{teamId:'s',messageId:'pending'}})
+  assert.equal(port.team('s').pendingMessages,0);assert.equal(port.team('s').busy,false)
+  members[1].status='running'
+  assert.equal(await port.stop({sessionId:'s',requestId:'rpc'}),'already-idle')
+  assert.equal(port.team('s').busy,true);assert.equal(cancelled,0);assert.equal(interrupted,0)
+  liveLead=false;assert.equal(port.team('s').state,'inactive');assert.equal(resumed,0)
+})
+test('manual release cannot hide a busy or unreadable Team',async()=>{
+  for(const state of ['busy','unavailable']){
+    const f=fixture();f.port.send=async()=>{throw new Error('lost response')};const r=await f.begin()
+    f.live.team={sessionId:'session-one',state:state==='busy'?'live':'unavailable',busy:state==='busy',members:[],pendingMessages:0}
+    await assert.rejects(f.service.acknowledge('task-one',r.runId),e=>e.code==='execution.still-active')
+    assert.equal((await f.service.status('task-one')).run.releasedAt,undefined);await f.service.close()
+  }
 })
 test('another turn end or old output cannot complete this request',async()=>{
   const f=fixture();await f.begin();f.emit('turn/end',{turn:77,reason:{kind:'completed'}})

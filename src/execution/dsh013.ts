@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { ExecutionError, type DshEvent, type DshExecutionPort, type ExecutionRun, type SessionProbe } from './types.js'
+import { ExecutionError, type DshEvent, type DshExecutionPort, type ExecutionRun, type ExecutionTeam, type SessionProbe } from './types.js'
 
 const array = (value: unknown): any[] => Array.isArray(value) ? value : []
 const ownRpc = (message: any, requestId: string) => message?.source?.kind === 'user' && message.source.rpcId === requestId
@@ -12,6 +12,36 @@ export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHo
   const capable = () => ['inspect', 'resolveAgent', 'prompt', 'cancel', 'updateQueue'].every(k => typeof controller?.[k] === 'function')
     && typeof ctx?.on === 'function' && typeof service('agents')?.get === 'function'
   const live = (sessionId: string) => service('agents')?.get?.(sessionId)
+  const team = (sessionId: string): ExecutionTeam | undefined => {
+    const teams = service('agentTeams')
+    if (!teams) return undefined
+    const result: ExecutionTeam = { sessionId, state: 'inactive', busy: false, pendingMessages: 0, members: [] }
+    const agent = live(sessionId)
+    if (!agent) return result // A cold read must not wake any part of the Team.
+    try {
+      const membership = teams.membership(agent)
+      if (membership.role !== 'lead' || membership.root !== agent) throw new Error('not a Team Lead')
+      result.members = teams.listMembers(agent).map((member: ExecutionTeam['members'][number]) => {
+        const inbox = live(member.id)?.inbox
+        return { id: member.id, name: member.name, role: member.role, status: member.status,
+          queued: array(inbox?.nextTurn).length + array(inbox?.nextStep).length }
+      })
+      // Delivery failures leave durable messages outside the live Agent inbox.
+      // Read only their identities from the official Lead log, never message content.
+      const pending = new Set<string>()
+      for (const event of agent.session.snapshotEvents()) {
+        if (event.data?.teamId !== membership.id) continue
+        if (event.type === 'team/message/queued') pending.add(event.data.message.id)
+        if (event.type === 'team/message/delivered') pending.delete(event.data.messageId)
+      }
+      result.pendingMessages = pending.size
+      result.busy = pending.size > 0 || result.members.some(member => member.status === 'running' || member.status === 'provisioning' || member.queued > 0)
+      result.state = 'live'
+      return result
+    } catch {
+      return { ...result, state: 'unavailable', members: [] }
+    }
+  }
   const inspect = async (sessionId: string) => {
     const result = await controller.inspect(sessionId, AbortSignal.timeout(5000))
     if (result?.meta?.id !== sessionId || !Array.isArray(result.events)) throw new ExecutionError('execution.session-unavailable', '官方会话检查没有返回可用结果。')
@@ -61,12 +91,14 @@ export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHo
       sessionId, cwd: typeof result.meta.cwd === 'string' ? result.meta.cwd : '', model: model.label, modelIdentity: model.identity,
       running: agent?.status === 'running', queued: array(agent?.inbox?.nextTurn).length + array(agent?.inbox?.nextStep).length,
       lastSeq: result.events.at(-1)?.seq ?? -1,
+      team: team(sessionId),
       ...(typeof result.meta.origin === 'string' ? { origin: result.meta.origin } : {}),
       ...(workspace ? { workspaceId: String(workspace.id) } : {}),
     }
   }
   return {
     capable,
+    team,
     probe,
     inspect: async sessionId => ({ events: (await inspect(sessionId)).events }),
     prepare: async sessionId => {
@@ -78,6 +110,9 @@ export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHo
       const agent = live(sessionId)
       if (!agent || agent.session?.header?.origin === 'subagent') throw new ExecutionError('execution.prepare-failed', '会话尚未就绪，未发送。')
       const events: DshEvent[] = agent.session.snapshotEvents()
+      const currentTeam = team(sessionId)
+      if (currentTeam?.state === 'unavailable') throw new ExecutionError('execution.team-unavailable', '暂时无法读取团队状态，未发送；请打开原会话核对 Teams。')
+      if (currentTeam?.busy) throw new ExecutionError('execution.team-busy', '团队仍在运行、创建队友或有待处理消息，未发送新任务。')
       if (agent.status === 'running' || array(agent.inbox?.nextTurn).length || array(agent.inbox?.nextStep).length
         || (expected && ((events.at(-1)?.seq ?? -1) !== expected.baseSeq || agent.session.header.cwd !== expected.cwd
           || (expected.modelIdentity !== undefined && modelOf(events).identity !== expected.modelIdentity)))) {

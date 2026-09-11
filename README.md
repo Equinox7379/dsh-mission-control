@@ -21,6 +21,7 @@ It is useful when your work spans several AI conversations and you need to keep 
 - **Execute through an existing DSH conversation.** Bind a session, inspect its working directory, model, and outgoing prompt, then explicitly confirm the dispatch.
 - **Follow the actual run.** See output, tool-call counts, tool errors, and execution state. Reopening the console does not resend the task.
 - **Keep review separate from execution.** Record a plan, approvals, validation evidence, and final acceptance. A completed model turn is not automatically a completed task.
+- **Observe official Agent Teams.** See member activity and queued work after the Lead turn ends. Dispatch waits for the existing Team to become idle; the shared task board and later Team results remain in the original conversation.
 - **Export a Markdown report.** Keep project and task context available outside the UI.
 
 Mission Control uses DSH's existing session engine and configured model. It does not require a separate model API key or replace the conversation transcript.
@@ -78,7 +79,7 @@ The expandable manual workflow is optional. Use it when you need plan approval, 
 - Plugin state is stored under the DSH home directory in `storages/dsh-mission-control/`. Task state and execution metadata use separate JSON files.
 - The original conversation remains in DSH's own session storage.
 - Execution uses the selected session's model and permission policy. Model usage follows that session's existing provider configuration and costs.
-- Stop requests are limited to the task's own queued message or still-owned live turn. Uncertain execution states remain visible instead of being reported as success.
+- Stop requests are limited to the task's own queued message or still-owned Lead turn; teammates may keep working. Open the conversation's **Agent Team** panel to inspect the Team, and ask the Lead to interrupt individual teammates when needed. Uncertain execution states remain visible instead of being reported as success.
 - Markdown exports default to `Documents/DshMissionControlExports`. Set `DSH_MISSION_CONTROL_EXPORT_DIR` to choose another export directory.
 
 ## Development
