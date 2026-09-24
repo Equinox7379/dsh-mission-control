@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -110,5 +110,39 @@ test('Host API enforces same-origin handshake, CSRF, and state revisions', async
     await new Promise((resolve) => server.close(resolve))
     await store.close()
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('Desktop proxy accepts missing browser headers only after official Connection admission', async () => {
+  const hosts = new Set()
+  const api = createHostApi({
+    store: { snapshot: () => ({ revision: 0 }) },
+    expectedHosts: hosts,
+    expectedOrigins: new Set(),
+    authenticate: req => req.headers.cookie === 'admitted-test-cookie',
+  })
+  const server = createServer(api.handler)
+  await new Promise((resolve, reject) => server.listen(0, '127.0.0.1', error => error ? reject(error) : resolve()))
+  const host = `127.0.0.1:${server.address().port}`
+  hosts.add(host)
+  const url = `http://${host}/mission-control/api`
+  const body = JSON.stringify({ v: 1, requestId: 'mc-desktop-proxy', method: 'system.handshake', args: {} })
+  const post = headers => fetch(url, { method: 'POST', headers: { host, 'content-type': 'application/json', ...headers }, body })
+  try {
+    assert.equal((await post({})).status, 403)
+    assert.equal((await post({ cookie: 'admitted-test-cookie' })).status, 200)
+    assert.equal((await post({ cookie: 'admitted-test-cookie', origin: 'https://foreign.example' })).status, 403)
+    assert.equal((await post({ cookie: 'admitted-test-cookie', 'sec-fetch-site': 'cross-site' })).status, 403)
+    const foreignHost = await new Promise((resolve, reject) => {
+      const req = httpRequest(url, { method: 'POST', headers: {
+        host: 'foreign.example', cookie: 'admitted-test-cookie', 'content-type': 'application/json',
+        'content-length': Buffer.byteLength(body),
+      } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)) })
+      req.on('error', reject)
+      req.end(body)
+    })
+    assert.equal(foreignHost, 403)
+  } finally {
+    await new Promise(resolve => server.close(resolve))
   }
 })

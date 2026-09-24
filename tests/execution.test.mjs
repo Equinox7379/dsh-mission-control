@@ -235,11 +235,11 @@ test('oversized goals fail before sending and closed tasks cannot start',async()
   f.task.objective='goal';f.task.phase='done';await assert.rejects(f.service.preview('task-one'));assert.equal(f.calls.length,0);await f.service.close()
 })
 
-test('DSH 0.1.3 adapter calls official prompt exactly and removes only our inbox item',async()=>{
-  let handler, sent, removed, cancelled=0
+test('DSH adapter calls official prompt exactly and confirms removal of only our inbox item',async()=>{
+  let handler, sent, removed, cancelled=0, rejectRemoval=false
   const agent={id:'session-one',status:'idle',session:{header:{id:'session-one',cwd:'/work'},snapshotEvents:()=>[]},inbox:{nextTurn:[],nextStep:[]}}
   const controller={inspect:async()=>({meta:agent.session.header,events:[]}),resolveAgent:async()=>({agent}),
-    prompt:async(req)=>{sent=req;return {accepted:true}},cancel:()=>{cancelled++;return{accepted:true}},updateQueue:req=>{removed=req;return{accepted:true}}}
+    prompt:async(req)=>{sent=req;return {accepted:true}},cancel:()=>{cancelled++;return{accepted:true}},updateQueue:async req=>{removed=req;if(rejectRemoval)throw new Error('queue failed');return{accepted:true}}}
   const ctx={agents:{get:()=>agent},on:(_name,cb)=>{handler=cb;return()=>{}},workspaceRegistry:{list:()=>[]},agentDefaultModel:{currentSelection:()=>({provider:'provider',model:'model'})}}
   const port=createDsh013ExecutionPort(ctx,controller);assert.equal(port.capable(),true)
   await port.prepare('session-one');await port.send('session-one','rpc-one','payload',{baseSeq:-1,cwd:'/work'})
@@ -247,6 +247,8 @@ test('DSH 0.1.3 adapter calls official prompt exactly and removes only our inbox
   agent.inbox.nextTurn=[{id:'m-other',source:{kind:'user',rpcId:'other'}},{id:'m-own',source:{kind:'user',rpcId:'rpc-one'}}]
   assert.equal(await port.stop({sessionId:'session-one',requestId:'rpc-one'}),'queue-removed')
   assert.equal(removed.itemId,'m-own');assert.equal(cancelled,0)
+  rejectRemoval=true
+  await assert.rejects(port.stop({sessionId:'session-one',requestId:'rpc-one'}), /queue failed/)
 })
 test('DSH 0.1.3 adapter refuses cancel after another human instruction or turn completion',async()=>{
   let cancelled=0

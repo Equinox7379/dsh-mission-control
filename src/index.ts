@@ -27,12 +27,14 @@ export async function apply(ctx: any): Promise<void> {
   const store = new AtomicStateStore(join(home, 'storages', 'dsh-mission-control', 'state-v1.json'))
   await store.open()
   ctx.effect(() => async () => { await store.close() }, 'dsh-mission-control: storage lifecycle')
-  ctx.inject(['webServer', 'sessionController'], (scope: any) => {
+  ctx.inject(['webServer', 'sessionController', 'connection'], (scope: any) => {
     const webServer = scope?.webServer ?? scope
     const sessionController = scope?.sessionController
+    const connection = scope?.connection
     const port = Number(webServer?.port)
     if (!webServer?.register || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error('dsh-mission-control requires a bound webServer')
     if (!sessionController?.inspect) throw new Error('dsh-mission-control requires sessionController.inspect')
+    if (typeof connection?.admit !== 'function') throw new Error('dsh-mission-control requires authenticated Connection requests')
     const authority = `127.0.0.1:${port}`
     const exportDirectory = process.env.DSH_MISSION_CONTROL_EXPORT_DIR
       ?? join(process.env.USERPROFILE ?? home, 'Documents', 'DshMissionControlExports')
@@ -48,8 +50,9 @@ export async function apply(ctx: any): Promise<void> {
       store,
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
-      version: '0.2.1',
-      certifiedDsh: '0.1.5-rc.2',
+      authenticate: req => !('rejection' in connection.admit(req)),
+      version: '0.2.3',
+      certifiedDsh: '0.1.7-rc.2',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,
       validateSession: async (sessionId, signal) => {

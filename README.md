@@ -30,15 +30,15 @@ Mission Control uses DSH's existing session engine and configured model. It does
 
 | Component | Current support |
 | --- | --- |
-| Mission Control | `0.2.1` |
-| DSH runtime | **`0.1.5-rc.2`** — the peer dependencies are pinned to this version |
+| Mission Control | `0.2.3` |
+| DSH runtime | **`0.1.7-rc.2`** — the peer dependencies are pinned to this version |
 | Node.js | 22 or newer; CI runs on Node 22, local verification also uses Node 24 |
 | Package manager | pnpm 11 |
 | Verified platform | Windows; the CI workflow builds and tests on `windows-latest` |
 | Interface | Chinese UI, desktop browser layout; narrow screens are read-only |
-| Desktop integration | Optional Desktop Bridge support for a compatible DshDesktop build |
+| Desktop integration | Official DSH Desktop uses its authenticated Web Host; the older DshDesktop Bridge remains optional |
 
-Use a running DSH **Web** profile on `127.0.0.1`. Install and configure DSH first. Compatibility with other DSH releases or operating systems is not currently certified.
+Use the official DSH Desktop with its independent `desktop` profile. Product data under DSH_HOME is shared with Web, but plugin installation and activation are separate. Compatibility with other DSH releases or operating systems is not currently certified.
 
 ## Quick start
 
@@ -53,16 +53,15 @@ pnpm run build
 
 Build before installing: the repository contains source code, and the generated `lib/` directory is intentionally not committed.
 
-### 2. Add it to your DSH Web profile
+### 2. Add the built package to DSH Desktop
 
-From the repository directory, in **PowerShell**:
+Pack the build into a local TGZ, then choose that TGZ in the main application's **Plugins** page. The Desktop profile is owned by the application; the public `dsh plugin` CLI cannot install into it.
 
-```powershell
-$pluginPath = (Get-Location).Path
-dsh plugin --profile web add "file:$pluginPath"
+```sh
+npm pack --pack-destination <output-directory>
 ```
 
-Use an absolute path: DSH runs its package operation from the profile directory. Restart DSH Web through your usual launcher, then reload the page. The plugin's bundle registers itself; no manual `cordis.patch.yml` insertion is needed.
+Select the resulting absolute `.tgz` path. The plugin's bundle registers itself; no manual `cordis.patch.yml` insertion or copying of task state is needed. Follow the Plugins page's restart instruction if it reports one.
 
 ### 3. Run your first task
 

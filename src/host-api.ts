@@ -24,6 +24,7 @@ export interface HostApiOptions {
   store: AtomicStateStore
   expectedHosts: ReadonlySet<string>
   expectedOrigins: ReadonlySet<string>
+  authenticate?: (request: IncomingMessage) => boolean
   csrf?: string
   version?: string
   certifiedDsh?: string
@@ -116,17 +117,22 @@ function page<T>(items: T[], offset: number, limit: number) {
 
 export function createHostApi(options: HostApiOptions) {
   const csrf = options.csrf ?? randomBytes(32).toString('base64url')
-  const pluginVersion = options.version ?? '0.2.1'
-  const certifiedDsh = options.certifiedDsh ?? '0.1.5-rc.2'
+  const pluginVersion = options.version ?? '0.2.3'
+  const certifiedDsh = options.certifiedDsh ?? '0.1.7-rc.2'
   const protocolFingerprint = options.protocolFingerprint ?? 'unknown'
 
   const guardBase = (req: IncomingMessage, originRequired: boolean): string | null => {
     if (!loopback(req.socket.remoteAddress)) return 'loopback-required'
     if (!options.expectedHosts.has(String(req.headers.host ?? ''))) return 'host-refused'
+    const authenticated = options.authenticate?.(req) === true
+    if (options.authenticate && !authenticated) return 'authentication-refused'
     const origin = req.headers.origin
-    if ((originRequired || origin !== undefined)
+    // Desktop's authenticated dsh-app forwarding removes Origin and Fetch Metadata.
+    // Only the official Connection cookie admission may authorize that header shape.
+    const desktopProxy = authenticated && origin === undefined && req.headers['sec-fetch-site'] === undefined
+    if (!desktopProxy && (originRequired || origin !== undefined)
       && (Array.isArray(origin) || !options.expectedOrigins.has(String(origin ?? '')))) return 'origin-refused'
-    if (req.headers['sec-fetch-site'] !== 'same-origin') return 'fetch-site-refused'
+    if (!desktopProxy && req.headers['sec-fetch-site'] !== 'same-origin') return 'fetch-site-refused'
     return null
   }
 

@@ -4,7 +4,7 @@ import { ExecutionError, type DshEvent, type DshExecutionPort, type ExecutionRun
 const array = (value: unknown): any[] => Array.isArray(value) ? value : []
 const ownRpc = (message: any, requestId: string) => message?.source?.kind === 'user' && message.source.rpcId === requestId
 
-/** Thin adapter to the verified DSH 0.1.3 host SessionController, not a second Agent runtime. */
+/** Thin adapter to the verified DSH 0.1.7 host SessionController, not a second Agent runtime. */
 export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHome?: string): DshExecutionPort {
   // Cordis permits optional lookup through get(); undeclared property access
   // throws even when optional chaining is used. Keep plain standalone hosts usable.
@@ -129,7 +129,7 @@ export function createDsh013ExecutionPort(ctx: any, controller: any, protectedHo
       const ourQueued = queued.filter(message => ownRpc(message, run.requestId))
       if (ourQueued.length === 1 && run.turn === undefined) {
         // Do not drop anyone else's inbox. The official cancel() deliberately keeps queued input.
-        controller.updateQueue({ sessionId: run.sessionId, itemId: ourQueued[0].id, action: { kind: 'remove' } })
+        await controller.updateQueue({ sessionId: run.sessionId, itemId: ourQueued[0].id, action: { kind: 'remove' } })
         return 'queue-removed'
       }
       if (agent.status !== 'running') return 'already-idle'

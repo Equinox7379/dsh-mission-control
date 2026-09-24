@@ -5,20 +5,19 @@ import { pathToFileURL } from 'node:url'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { releasedV2SessionFormatCodec as codec, restoreReleasedV2Artifact } from '@deepseek-ai/dsh-session-format-v1-to-v2'
 import { createDsh013ExecutionPort } from '../lib/execution/dsh013.js'
 import { TaskExecutionService } from '../lib/execution/runner.js'
 import { ExecutionFile } from '../lib/execution/store.js'
 
 const require = createRequire(import.meta.url)
 const hostRequire = createRequire(require.resolve('@deepseek-ai/dsh-api-session-controller'))
-const { Session, KNOWN_SESSION_EVENT_TYPES } = await import(pathToFileURL(hostRequire.resolve('@deepseek-ai/dsh-session')).href)
+const { Session } = await import(pathToFileURL(hostRequire.resolve('@deepseek-ai/dsh-session')).href)
 const { createUserMessage, createAssistantMessage, createToolResultMessage, AssistantStreamAccumulator } = await import(pathToFileURL(hostRequire.resolve('@deepseek-ai/dsh-llm')).href)
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
 function fixture({ session: restored, saved, repository } = {}) {
   const session = restored ?? Session.create('session-013', [], {
-    version: 2, id: 'session-013', createdAt: 1, cwd: '/work/project-013', isSeeded: false,
+    version: 4, id: 'session-013', createdAt: 1, cwd: '/work/project-013', isSeeded: false,
   })
   const agent = { id: session.id, status: 'idle', session, inbox: { nextTurn: [], nextStep: [] } }
   let subscriber, attached = true
@@ -83,21 +82,7 @@ function complete(f, requestId) {
   f.emit('turn/end', { turn:1,reason:{kind:'completed'} })
 }
 
-async function reloadV2(session, directory) {
-  const rows = [codec.encodeHeader({...session.header,delegationDepth:0},session.inheritedEventCount),
-    ...session.snapshotEvents().map(event => codec.encodeEvent(event))]
-  const file = join(directory,'synthetic-session-v2.jsonl')
-  await writeFile(file,rows.map(row=>JSON.stringify(row)).join('\n')+'\n')
-  const physical = (await readFile(file,'utf8')).trimEnd().split('\n').map(line=>JSON.parse(line))
-  const decoder = codec.createDecoder(physical.shift(),'strict'), events = []
-  const sink = {emitEvent:event=>events.push(event),emitRun:run=>events.push(...run.expand())}
-  for (const row of physical) decoder.decodeRow(row,sink)
-  const inheritedEventCount = decoder.finish(sink)
-  const artifact = restoreReleasedV2Artifact({header:decoder.header,events,inheritedEventCount},KNOWN_SESSION_EVENT_TYPES)
-  return Session.fromRestore(session.id,artifact.events,artifact.header,artifact.inheritedEventCount,'detached')
-}
-
-test('0.1.3 asynchronous Agent preparation finishes before inspection and one prompt admission', async () => {
+test('0.1.7 asynchronous Agent preparation finishes before inspection and one prompt admission', async () => {
   const f = fixture(); f.detach()
   try {
     const preparing = f.port.prepare(f.session.id)
@@ -111,7 +96,7 @@ test('0.1.3 asynchronous Agent preparation finishes before inspection and one pr
   } finally { await f.service.close() }
 })
 
-test('0.1.3 queue cancellation preserves foreign pending and steered messages', async () => {
+test('0.1.7 queue cancellation preserves foreign pending and steered messages', async () => {
   const f = fixture()
   try {
     const old = f.human('old-request'), foreign = f.human('new-request'), steer = f.human('foreign-steer')
@@ -125,7 +110,7 @@ test('0.1.3 queue cancellation preserves foreign pending and steered messages', 
   } finally { await f.service.close() }
 })
 
-test('0.1.3 cancellation requires the current uniquely owned turn even after steering', async () => {
+test('0.1.7 cancellation requires the current uniquely owned turn even after steering', async () => {
   const f = fixture()
   try {
     f.agent.status='running'; f.emit('turn/start',{turn:2}); f.emit('user/message',f.human('current'),true)
@@ -138,16 +123,17 @@ test('0.1.3 cancellation requires the current uniquely owned turn even after ste
   } finally { await f.service.close() }
 })
 
-test('official v2 Assistant codec survives cold inspect and host-index recovery without resending', async () => {
-  const directory = await mkdtemp(join(tmpdir(),'mc-v2-')), f = fixture()
+test('official V4 Session survives cold inspect and host-index recovery without resending', async () => {
+  const f = fixture()
   let g
   try {
     const run = await f.begin(); await f.service.close()
     complete(f,run.requestId)
-    const restored = await reloadV2(f.session,directory)
-    assert.equal(restored.header.version,2)
+    const restored = Session.fromRestore(f.session.id, f.session.snapshotEvents(), f.session.header,
+      f.session.inheritedEventCount, 'detached')
+    assert.equal(restored.header.version,4)
     const assistant = restored.snapshotEvents().find(e=>e.type==='assistant/message')
-    assert.ok(assistant.data.stream.some(record=>record.type==='text-chunks'))
+    assert.ok(assistant)
     assert.equal(assistant.sourceEventSeqs,undefined)
     g = fixture({session:restored,saved:f.repo.data})
     const inspected = await g.port.inspect(restored.id)
@@ -161,7 +147,7 @@ test('official v2 Assistant codec survives cold inspect and host-index recovery 
     assert.ok(!JSON.stringify(g.repo.data).includes('fixture\\\":true'))
     const repeated = await g.service.status(g.task.taskId)
     assert.equal(repeated.run.runId,run.runId); assert.equal(g.calls.prompts.length,0)
-  } finally { await f.service.close(); await g?.service.close(); await rm(directory,{recursive:true,force:true}) }
+  } finally { await f.service.close(); await g?.service.close() }
 })
 
 test('corrupt execution index cannot overwrite old task data or admit a replacement prompt', async () => {

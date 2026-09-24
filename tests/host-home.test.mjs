@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { apply } from '../lib/index.js'
+
+const require = createRequire(import.meta.url)
+const controllerRequire = createRequire(require.resolve('@deepseek-ai/dsh-api-session-controller'))
+const { Context } = await import(pathToFileURL(controllerRequire.resolve('@deepseek-ai/cordis')).href)
 
 test('official home resolver supports absent environment and takes precedence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mc-home-'))
@@ -17,7 +25,7 @@ test('official home resolver supports absent environment and takes precedence', 
       await apply({
         dshHomePath() { called++; return root },
         effect(register) { cleanup.push(register()) },
-        inject(dependencies) { assert.deepEqual(dependencies, ['webServer', 'sessionController']) },
+        inject(dependencies) { assert.deepEqual(dependencies, ['webServer', 'sessionController', 'connection']) },
       })
       assert.equal(called, 1)
       for (const dispose of cleanup) await dispose()
@@ -54,5 +62,37 @@ test('standalone hosts retain an explicit absolute environment fallback', async 
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('official Cordis mounts Desktop routes with Connection admission on a synthetic home', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'mc-desktop-home-'))
+  const routes = new Map()
+  const server = createServer((req, res) => {
+    const handler = routes.get(req.url)
+    if (handler) void handler(req, res)
+    else { res.writeHead(404); res.end() }
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const port = server.address().port
+  const root = new Context()
+  root.provide('dshHomePath', () => home)
+  root.provide('webServer', { port, register: route => {
+    routes.set(route.path, route.handler)
+    return () => routes.delete(route.path)
+  } })
+  root.provide('sessionController', { inspect: async () => ({ meta: { id: 'fixture' }, events: [] }) })
+  root.provide('connection', { admit: req => req.headers.cookie === 'admitted' ? { peer: {} } : { rejection: 401 } })
+  try {
+    await root.plugin(apply)
+    assert.deepEqual([...routes.keys()].sort(), ['/mission-control/api', '/mission-control/health'])
+    const base = `http://127.0.0.1:${port}`
+    assert.equal((await fetch(`${base}/mission-control/health`)).status, 403)
+    assert.equal((await fetch(`${base}/mission-control/health`, { headers: { cookie: 'admitted' } })).status, 200)
+  } finally {
+    await root.fiber.dispose()
+    await new Promise(resolve => server.close(resolve))
+    await rm(home, { recursive: true, force: true })
   }
 })

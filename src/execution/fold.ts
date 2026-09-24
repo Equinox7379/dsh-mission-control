@@ -35,9 +35,9 @@ export function foldExecution(run: ExecutionRun, event: DshEvent): ExecutionRun 
   }
   if (event.type === 'tool/result') {
     const callId = data.message?.source?.callId
-    // Ordinary tool refusals carry isError in the canonical result block;
-    // the optional event-level error contains only additional structured info.
-    const failed = data.error !== undefined || (Array.isArray(data.message?.content)
+    // DSH 0.1.7 marks tool failures on the message; preserve older block and
+    // event-level signals when replaying an existing session.
+    const failed = data.error !== undefined || data.message?.isError === true || (Array.isArray(data.message?.content)
       && data.message.content.some((block: any) => block?.type === 'tool-result'
         && block.toolCallId === callId && block.isError === true))
     if (failed) next.toolErrors += 1
