@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { applyCommand, createInitialState, type DomainCommand, type MissionControlStateV1, validateState } from './domain.js'
+import { randomUUID } from 'node:crypto'
+import { createInitialState, type MissionControlStateV1, validateState } from './domain.js'
+import { applyWorkCommand, type WorkCommand } from './workflow.js'
 
 export interface StateIo {
   read(path: string): Promise<string>
@@ -26,28 +28,35 @@ export class AtomicStateStore {
 
   async open(): Promise<MissionControlStateV1> {
     await this.io.ensureDir(dirname(this.statePath))
-    try {
-      const parsed = JSON.parse(await this.io.read(this.statePath))
-      this.state = validateState(parsed)
-      if (JSON.stringify(parsed) !== JSON.stringify(this.state)) await this.persist(this.state)
-    }
+    let original: string
+    try { original = await this.io.read(this.statePath) }
     catch (error: any) {
       if (error?.code !== 'ENOENT') throw error
       await this.persist(this.state)
+      return this.snapshot()
     }
+    const parsed = JSON.parse(original)
+    const loaded = validateState(parsed) // Any parse/validation failure leaves original bytes untouched.
+    if (JSON.stringify(parsed) !== JSON.stringify(loaded)) {
+      const backup = `${this.statePath}.pre-migration-${randomUUID()}.json`
+      await this.io.write(backup, original) // Exclusive write; failure prevents the migration.
+      if (await this.io.read(backup) !== original) throw new Error('Migration backup verification failed; original state retained')
+      await this.persist(loaded)
+    }
+    this.state = loaded
     return this.snapshot()
   }
 
   snapshot(): MissionControlStateV1 { return structuredClone(this.state) }
 
-  execute(expectedRevision: number, command: DomainCommand): Promise<MissionControlStateV1> {
+  execute(expectedRevision: number, command: WorkCommand): Promise<MissionControlStateV1> {
     if (this.closed) return Promise.reject(new Error('store is closed'))
     let resolve!: (state: MissionControlStateV1) => void
     let reject!: (error: unknown) => void
     const result = new Promise<MissionControlStateV1>((ok, bad) => { resolve = ok; reject = bad })
     this.tail = this.tail.then(async () => {
       try {
-        const next = applyCommand(this.state, expectedRevision, command)
+        const next = applyWorkCommand(this.state, expectedRevision, command)
         await this.persist(next)
         this.state = next
         resolve(this.snapshot())
