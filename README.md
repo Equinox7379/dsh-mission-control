@@ -130,9 +130,9 @@ Focused fixes and concrete workflow suggestions are welcome. For a larger featur
 
 在项目中建立任务，写明目标与验收标准，绑定一个已有的 DSH 会话；确认工作目录、模型和待发送内容后，再交给 DSH 执行。执行输出、工具调用和任务状态集中显示，模型回合结束与人工验收保持分开。
 
-当前版本为 `0.2.1`，适配 **DSH `0.1.5-rc.2`**，采用中文界面，已在 Windows 验证。普通浏览器即可使用任务界面，Desktop Bridge 是可选集成；窄屏仅供查看。
+当前版本为 `0.2.3`，适配 **DSH `0.1.7-rc.2`**，采用中文界面。Windows 隔离构建与相关测试已通过，官方 Desktop 的插件加载与界面已核验；本版本尚未进行生产模型任务的执行验证。官方 Desktop 使用经过认证的 Web Host，旧版 DshDesktop Bridge 是可选集成；窄屏仅供查看。
 
-安装时先按上面的步骤克隆并构建，再使用绝对路径添加到 DSH Web profile，重启后打开「任务指挥台」。源代码仓库不包含生成的 `lib/`，因此不要跳过构建直接安装 GitHub 源码地址。
+安装时先按上面的步骤克隆、构建并打包 TGZ，再通过官方 Desktop 的「插件」页面选择该文件，按照页面提示完成加载后打开「任务指挥台」。Desktop 使用独立的 `desktop` profile。源代码仓库不包含生成的 `lib/`，因此不要跳过构建直接安装 GitHub 源码地址。
 
 欢迎提交可复现的问题、实际使用反馈和范围清楚的修复。项目独立开发，不是 DeepSeek 官方产品。
 
