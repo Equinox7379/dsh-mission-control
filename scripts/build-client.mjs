@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,4 +31,5 @@ const modules = order.map((file) => {
 const output = `window.__ModuleLoader__.load({id:"dsh-mission-control",factory:(require)=>{var __modules={};${modules}\nvar __cache={};function __localRequire(id){if(id[0]!==".")return require(id);id=id.slice(2);if(__cache[id])return __cache[id].exports;var module={exports:{}};__cache[id]=module;__modules[id](__localRequire,module,module.exports);return module.exports}var module={exports:{}};__modules["client.js"](__localRequire,module,module.exports);return module.exports}});\n`
 await mkdir(outputDir, { recursive: true })
 await writeFile(join(outputDir, 'client.js'), output)
-await rm(buildDir, { recursive: true, force: true })
+// Retain compiler output. An environment-selected directory must never become
+// a recursive cleanup target; the next compilation overwrites its own files.

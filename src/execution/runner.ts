@@ -88,7 +88,7 @@ export class TaskExecutionService {
     if (!opaqueId(taskId)) throw new ExecutionError('execution.arguments', '任务引用无效。')
     const value = this.tasks.snapshot().tasks[taskId]
     if (!value) throw new ExecutionError('execution.task-missing', '任务不存在，请刷新工作台。')
-    if (['done','cancelled','failed'].includes(value.phase)) throw new ExecutionError('execution.task-closed', '任务已关闭，请新建任务，不能暗中重开。')
+    if (['done','cancelled','failed'].includes(value.phase)) throw new ExecutionError('execution.task-closed', '任务已关闭，请先到验收记录中明确重新打开；不会自动续跑。')
     if (!value.sessionBinding?.sessionId) throw new ExecutionError('execution.session-required', '先在“关联会话”中绑定已配置工作区和模型的会话，再启动。')
     return structuredClone(value)
   }
@@ -113,6 +113,55 @@ export class TaskExecutionService {
     const next: ExecutionState = { version: 1, runs: { ...this.state.runs, [run.taskId]: structuredClone(run) } }
     await this.repository.save(next)
     this.state = next
+  }
+
+  /** Queue metadata only: opening the workbench never resumes or sends to an Agent. */
+  async overview() {
+    await this.initialized
+    return this.enqueue(async () => {
+      const active = this.busyRun()
+      const runs = Object.values(this.state.runs).map(run => {
+        const team = this.port.team(run.sessionId)
+        return { taskId: run.taskId, runId: run.runId, sessionId: run.sessionId, taskRevision: run.taskRevision,
+          status: run.status, updatedAt: run.updatedAt,
+          ...(run.releasedAt !== undefined ? { releasedAt: run.releasedAt } : {}),
+          ...(team?.busy ? { teamBusy: true } : {}),
+          ...(team?.state === 'unavailable' ? { teamUnavailable: true } : {}) }
+      })
+      return { enabled: !this.closed && !this.fault && this.port.capable(), runs,
+        ...(active ? { activeTaskId: active.taskId } : {}), ...(this.fault ? { notice: this.fault } : {}) }
+    })
+  }
+
+  /** Serialize task finalization/binding with MC dispatch; never cancel external work. */
+  async withIdleTask<T>(taskId: string, operation: () => Promise<T>): Promise<T> {
+    await this.initialized
+    return this.enqueue(async () => {
+      if (!opaqueId(taskId)) throw new ExecutionError('execution.arguments', '任务引用无效。')
+      this.requireReady()
+      const task = this.tasks.snapshot().tasks[taskId]
+      if (!task) throw new ExecutionError('execution.task-missing', '任务不存在，请刷新。')
+      const run = this.state.runs[taskId]
+      if (run && (isActive(run) || this.inflight.has(run.runId))) {
+        throw new ExecutionError('execution.still-active', '这项任务仍有运行或未确认的请求，请先核对原会话。')
+      }
+      const sessions = new Set([task.sessionBinding?.sessionId, run?.sessionId].filter((id): id is string => !!id))
+      for (const sessionId of sessions) {
+        let probe: SessionProbe
+        try { probe = await this.port.probe(sessionId) }
+        catch (error: any) {
+          // An explicitly deleted session cannot be running; other failures remain unknown.
+          if (['session-not-found','session/not-found','SESSION_QUERY_SESSION_NOT_FOUND'].includes(error?.code)
+            || error?.name === 'ApiSessionNotFound' || error?.constructor?.name === 'ApiSessionNotFound') continue
+          throw new ExecutionError('execution.unavailable', '暂时无法核对关联会话。本次更改未保存，请先在原会话检查。')
+        }
+        if (probe.sessionId !== sessionId || probe.running || probe.queued > 0 || probe.team?.busy || probe.team?.state === 'unavailable') {
+          throw new ExecutionError('execution.still-active', '会话、队友或团队消息仍在处理中或尚未确认，本次更改未保存。')
+        }
+      }
+      this.requireReady()
+      return operation()
+    })
   }
 
   async preview(taskId: string): Promise<ExecutionPreview> {

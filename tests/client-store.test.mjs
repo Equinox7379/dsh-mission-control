@@ -69,6 +69,6 @@ test('Host restart re-handshakes but never retries an uncertain mutation', async
     assert.equal(mutationCalls, 1)
     assert.equal(handshakeCalls, 2)
     assert.equal(result.state.revision, 2)
-    assert.match(result.error.message, /not retried/i)
+    assert.match(result.error.message, /没有重试/u)
   } finally { store.close(); globalThis.fetch = originalFetch }
 })

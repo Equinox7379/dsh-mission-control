@@ -18,7 +18,7 @@ test('a Session created before an open failure is preserved and marked for repai
   const result = await createOpenBindSession(task, sessions, store)
   assert.deepEqual(result, {
     status: 'binding-incomplete', sessionId: 'session-preserved',
-    message: 'Session was preserved. Open it from the Session list, then bind it manually.',
+    message: '会话已经保留。请从会话列表打开，再手动关联。',
   })
   assert.equal(commands.length, 1)
   assert.equal(commands[0].type, 'task.binding-repair')

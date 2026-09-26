@@ -1,3 +1,11 @@
+# Lifecycle scripts required by the locked rc.2 development dependency graph.
+# Version-scoped approval keeps newly introduced versions subject to review.
+allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local@0.1.7-rc.2': true
+  '@google/genai@1.52.0': true
+  'koffi@3.3.1': true
+  'node-pty@1.2.0-beta.15': true
+  'protobufjs@7.6.6': true
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-agent-default-model@0.1.3-alpha.2'
   - '@deepseek-ai/dsh-agent-presets@0.1.3-alpha.2'

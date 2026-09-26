@@ -292,10 +292,11 @@ export function validateState(value: unknown): MissionControlStateV1 {
   const auditIds = new Set<string>(); let previousRevision = 0
   for (const event of state.audit) {
     if (!exactObject(event, ['schemaVersion', 'auditId', 'stateRevision', 'entityType', 'entityId', 'operation', 'actor', 'summary', 'time'])
-      || event.schemaVersion !== 1 || !ID.test(event.auditId) || !auditIds.add(event.auditId) || !Number.isSafeInteger(event.stateRevision) || event.stateRevision < previousRevision || event.stateRevision > state.revision
+      || event.schemaVersion !== 1 || !ID.test(event.auditId) || auditIds.has(event.auditId) || !Number.isSafeInteger(event.stateRevision) || event.stateRevision < previousRevision || event.stateRevision > state.revision
       || !['project', 'task', 'run', 'approval', 'evidence', 'system'].includes(event.entityType) || !stateText(event.entityId, 256)
       || !stateText(event.operation, 200) || !exactObject(event.actor, ['kind', 'name']) || !['owner', 'desktop', 'plugin', 'system'].includes(event.actor.kind) || !stateText(event.actor.name, 200)
       || !stateText(event.summary, 1000, true) || !stateTime(event.time)) malformed('audit event is invalid')
+    auditIds.add(event.auditId)
     previousRevision = event.stateRevision
   }
   return state

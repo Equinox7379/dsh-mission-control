@@ -1,13 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, resolve, join } from 'node:path'
+import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { AtomicStateStore } from '../lib/storage.js'
 
 test('atomic store survives close and reopen', async () => {
   const root = process.env.DSH_MC_TEST_TMP
-  assert.ok(root?.startsWith('D:\\'), 'DSH_MC_TEST_TMP must be on D:')
+  assert.ok(root && isAbsolute(root), 'DSH_MC_TEST_TMP must be an explicit isolated absolute directory')
+  assert.notEqual(resolve(root), resolve(homedir()), 'Do not use the user home as a test root')
   const dir = join(root, `store-${randomUUID()}`)
   const path = join(dir, 'state.json')
   await mkdir(dir, { recursive: true })
