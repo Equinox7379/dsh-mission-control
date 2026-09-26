@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { DomainError, type DomainCommand } from './domain.js'
+import type { WorkCommand } from './workflow.js'
 import { buildExport, writeExport } from './export.js'
 import type { AtomicStateStore } from './storage.js'
 import { EXECUTION_METHODS } from './execution/http.js'
@@ -13,14 +14,14 @@ const MAX_BODY = 262_144
 const MAX_RESPONSE = 1_048_576
 const REQUEST_ID = /^mc-[A-Za-z0-9._:-]{1,120}$/u
 const MUTATIONS = new Set([
-  'project.create', 'project.update', 'project.archive',
+  'project.create', 'project.update', 'project.archive', 'project.restore', 'task.accept', 'task.reopen',
   'task.create', 'task.update', 'task.transition', 'task.bind-session', 'task.unbind-session', 'task.binding-repair',
   'run.create', 'run.update', 'approval.request', 'approval.decide', 'evidence.append', 'settings.update',
 ])
 const READS = new Set(['system.status', 'state.snapshot', 'project.get', 'task.get', 'task.list', 'audit.page', 'export.preview'])
 
 export interface HostApiOptions {
-  execution?: { handle(method: string, args: unknown): Promise<unknown> }
+  execution?: { handle(method: string, args: unknown): Promise<unknown>; guardTask?<T>(taskId: string, operation: () => Promise<T>): Promise<T> }
   store: AtomicStateStore
   expectedHosts: ReadonlySet<string>
   expectedOrigins: ReadonlySet<string>
@@ -78,6 +79,9 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 const methodShape: Record<string, { required: string[]; optional?: string[] }> = {
+  'task.accept': { required: ['taskId', 'expectedEntityRevision', 'evidenceId', 'note', 'confirmed', 'actorRole'] },
+  'task.reopen': { required: ['taskId', 'expectedEntityRevision', 'confirmed', 'actorRole'] },
+  'project.restore': { required: ['projectId', 'expectedEntityRevision'] },
   'project.create': { required: ['projectId', 'title'], optional: ['description', 'workspaceId'] },
   'project.update': { required: ['projectId', 'expectedEntityRevision'], optional: ['title', 'description', 'workspaceId'] },
   'project.archive': { required: ['projectId', 'expectedEntityRevision'] },
@@ -95,10 +99,10 @@ const methodShape: Record<string, { required: string[]; optional?: string[] }> =
   'settings.update': { required: [], optional: ['ownerLabel'] },
 }
 
-function commandFor(method: string, args: unknown): DomainCommand {
+function commandFor(method: string, args: unknown): WorkCommand {
   const shape = methodShape[method]
   if (!shape || !exact(args, shape.required, shape.optional ?? [])) throw new DomainError('invalid-arguments', 'method arguments are invalid')
-  return { type: method, ...(args as object) } as DomainCommand
+  return { type: method, ...(args as object) } as WorkCommand
 }
 
 function publicError(error: unknown): { status: number; code: string; message: string; retryable: boolean } {
@@ -117,7 +121,7 @@ function page<T>(items: T[], offset: number, limit: number) {
 
 export function createHostApi(options: HostApiOptions) {
   const csrf = options.csrf ?? randomBytes(32).toString('base64url')
-  const pluginVersion = options.version ?? '0.2.3'
+  const pluginVersion = options.version ?? '0.3.0-rc.1'
   const certifiedDsh = options.certifiedDsh ?? '0.1.7-rc.2'
   const protocolFingerprint = options.protocolFingerprint ?? 'unknown'
 
@@ -232,7 +236,21 @@ export function createHostApi(options: HostApiOptions) {
             if (!await options.validateSession((command as Extract<DomainCommand, { type: 'task.bind-session' }>).sessionId, controller.signal)) throw new DomainError('session-not-found', 'Session does not exist')
           } finally { clearTimeout(timer) }
         }
-        const next = await options.store.execute(expectedStateRevision, command)
+        const guarded = command.type === 'task.accept' || command.type === 'task.reopen'
+          || command.type === 'task.bind-session' || command.type === 'task.unbind-session'
+          || (command.type === 'task.transition' && command.phase === 'done')
+        if ((command.type === 'task.accept' || command.type === 'task.reopen') && !options.execution?.guardTask) {
+          throw new DomainError('capability-unavailable', '暂时无法核对真实运行状态，本次操作未保存。')
+        }
+        let next
+        try {
+          const commit = () => options.store.execute(expectedStateRevision, command)
+          next = guarded && options.execution?.guardTask && 'taskId' in command
+            ? await options.execution.guardTask(command.taskId, commit) : await commit()
+        } catch (error) {
+          if (error instanceof ExecutionError) throw new DomainError(error.code, error.message)
+          throw error
+        }
         return success(res, requestId, next)
       } catch (error) { return failure(res, requestId, error) }
     },

@@ -51,7 +51,7 @@ export async function apply(ctx: any): Promise<void> {
       expectedHosts: new Set([authority]),
       expectedOrigins: new Set([`http://${authority}`]),
       authenticate: req => !('rejection' in connection.admit(req)),
-      version: '0.2.3',
+      version: '0.3.0-rc.1',
       certifiedDsh: '0.1.7-rc.2',
       protocolFingerprint: PROTOCOL_FINGERPRINT,
       exportDirectory,

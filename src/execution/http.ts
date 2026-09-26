@@ -2,13 +2,18 @@ import { ExecutionError, opaqueId } from './types.js'
 import type { TaskExecutionService } from './runner.js'
 
 /** Runs behind the existing Host API's Origin, Fetch-Site, body limit and CSRF guards. */
-export const EXECUTION_METHODS = new Set(['execution.preview','execution.start','execution.status','execution.stop','execution.acknowledge'])
+export const EXECUTION_METHODS = new Set(['execution.preview','execution.start','execution.status','execution.stop','execution.acknowledge','execution.overview'])
 const exact = (value: unknown, keys: string[]): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length
   && keys.every(key => Object.hasOwn(value, key))
 export function executionApi(service: TaskExecutionService) {
   return {
+    guardTask: <T>(taskId: string, operation: () => Promise<T>) => service.withIdleTask(taskId, operation),
     async handle(method: string, args: unknown): Promise<unknown> {
+      if (method === 'execution.overview') {
+        if (!exact(args, [])) throw new ExecutionError('execution.arguments', '任务队列查询参数无效。')
+        return service.overview()
+      }
       if (method === 'execution.start') {
         if (!exact(args, ['previewId','intentId']) || !opaqueId(args.previewId) || !opaqueId(args.intentId)) throw new ExecutionError('execution.arguments', '启动参数无效。')
         return service.start(args.previewId, args.intentId)

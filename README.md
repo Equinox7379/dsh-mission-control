@@ -1,141 +1,81 @@
 # DSH Mission Control · 任务指挥台
 
-**Turn AI conversations into work you can track.**
+把要做的事、AI 的执行和你的验收放在一起，但不把它们混为一件事。
 
-[![CI](https://github.com/Equinox7379/dsh-mission-control/actions/workflows/ci.yml/badge.svg)](https://github.com/Equinox7379/dsh-mission-control/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+本分支候选版本 **0.3.0-rc.1**，集成目标 **DeepSeek Harness 0.1.7-rc.2**。起点为 `codex/desktop-plugins-017` 的 `30e3f9e4943b866974b2330167d9f910ab2dea86`，承接 `codex/mission-control-redesign` 上的 `ce8e1ad41cc8a9b524947a6c71d28166199dcd91` 数据保护检查点，不从旧 `main` 覆盖安装。
 
-A local task console for **[DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness)**. Define the outcome, bind a conversation, preview the exact request, and send it once. Follow the model's output and tool activity, then decide whether the task is actually done.
+![真实组件在合成宿主中的桌面渲染](docs/mission-control-desktop.png)
 
-It is useful when your work spans several AI conversations and you need to keep the objective, execution, and verification together.
+## 日常使用
 
-[Quick start](#quick-start) · [Compatibility](#compatibility) · [Development](#development) · [中文说明](#中文说明)
+从官方 DSH 窗口的侧栏或会话标题栏打开“任务指挥台”。左侧选择项目，中间查看工作队列，右侧处理任务；窄窗口切换列表和详情，不横向挤压三个栏目。
 
-![Mission Control interface rendered with synthetic demonstration data](https://raw.githubusercontent.com/Equinox7379/dsh-mission-control/main/docs/mission-control-demo.png)
+普通任务只需名称。目标、验收要求可以随后补充。名称、项目和优先级放在独立编辑窗口，浏览时不铺满表单。保存任务不会发送模型请求。任务可以搜索，按处理顺序或更新时间排列；需要处理的问题、未确认请求、模型已结束但待验收的结果会分开显示。界面提供“当前占用”的直达入口，包括窄窗口的执行详情。
 
-*The actual plugin interface, rendered with synthetic projects, tasks, and execution data. No real model was called for this screenshot; a finished model turn and human acceptance are separate states.*
+任务详情分为三个区域：
 
-## What you can do
+- **任务**：目标、验收要求、关联会话；复杂任务可以展开计划、前置任务和证据要求。
+- **执行与结果**：发送前确认工作目录、模型、会话和完整提示词；查看本轮模型输出、工具摘要及团队活动。
+- **验收记录**：保存实际检查结果、计划确认与历史记录，明确进行人工验收。已关闭任务可明确重新打开，保留旧记录，不自动重发。
 
-- **Organize work by project.** Give each task an objective, acceptance criteria, priority, and plan.
-- **Execute through an existing DSH conversation.** Bind a session, inspect its working directory, model, and outgoing prompt, then explicitly confirm the dispatch.
-- **Follow the actual run.** See output, tool-call counts, tool errors, and execution state. Reopening the console does not resend the task.
-- **Keep review separate from execution.** Record a plan, approvals, validation evidence, and final acceptance. A completed model turn is not automatically a completed task.
-- **Observe official Agent Teams.** See member activity and queued work after the Lead turn ends. Dispatch waits for the existing Team to become idle; the shared task board and later Team results remain in the original conversation.
-- **Export a Markdown report.** Keep project and task context available outside the UI.
+项目可以归档和重新启用，不删除其中的任务。仍在运行、等待核对的任务不会因项目归档而从当前工作中消失。导出的是项目和任务的 **JSON 记录**，不是官方会话备份或附件导出。
 
-Mission Control uses DSH's existing session engine and configured model. It does not require a separate model API key or replace the conversation transcript.
+编辑冲突时保留输入，展示最新内容，需要再次明确确认后才能覆盖。保存回执不确定时先读取当前状态，不自动重试写入。弹窗可用键盘操作，放弃未保存输入前会提示；所有样式限定在插件自身范围内，不改变宿主页面的全局字体、滚动或配色。
 
-## Compatibility
+## 执行的边界
 
-| Component | Current support |
-| --- | --- |
-| Mission Control | `0.2.3` |
-| DSH runtime | **`0.1.7-rc.2`** — the peer dependencies are pinned to this version |
-| Node.js | 22 or newer; CI runs on Node 22, local verification also uses Node 24 |
-| Package manager | pnpm 11 |
-| Verified platform | Windows; the CI workflow builds and tests on `windows-latest` |
-| Interface | Chinese UI, desktop browser layout; narrow screens are read-only |
-| Desktop integration | Official DSH Desktop uses its authenticated Web Host; the older DshDesktop Bridge remains optional |
+执行使用官方 SessionController 和会话配置的模型、工具、工作目录及权限。预览不是发送；保存请求登记后才调用官方 prompt。同一发送意图不会再次派发。超时、关闭面板、断线和插件重启都不会触发自动重发。
 
-Use the official DSH Desktop with its independent `desktop` profile. Product data under DSH_HOME is shared with Web, but plugin installation and activation are separate. Compatibility with other DSH releases or operating systems is not currently certified.
+“本轮已结束”只表示模型回合结束，不等于任务通过验收。人工验收必须填写核对结果并明确确认；它与执行派发共用服务端执行队列，避免检查空闲与保存之间穿插新的发送。仍有活动或未确认请求、排队消息或忙碌团队时拒绝提前验收。任务的前置条件、要求的证据及计划确认仍适用。
 
-## Quick start
+**停止主助手本轮**仅处理仍能确认属于本插件的排队消息或活动回合。不会按进程名终止程序，不承诺停止所有队友。Lead 结束时仍会观察 Teams 的成员与未投递消息；团队仍忙或不可读时不继续派发。解除占用是用户核对后的记录操作，不是取消、重发或验收。
 
-### 1. Build the plugin
+关闭面板、卸载插件不终止官方会话；插件不写自定义官方会话事件或修改官方会话日志。普通浏览器不具备旧 DshDesktop 原生桥时，任务管理本身仍可使用。旧可选 Browser Bridge 保持原有合同，官方 Desktop 的认证通过 Host 的 Connection admission 接入，两者不是同一认证路径。
+
+## 既有数据
+
+仍使用以下两个文件，没有新增数据库，没有把演示任务写进初始状态：
+
+```text
+<DSH_HOME>/storages/dsh-mission-control/state-v1.json
+<DSH_HOME>/storages/dsh-mission-control/execution-v1.json
+```
+
+当前 v1 项目、任务、会话绑定、计划、审批、证据和执行引用保留。新验收操作使用原有 `manual-acceptance` 证据、任务阶段和审计结构，两个 schema 版本均未变化。
+
+有效的当前格式直接读取，不因加载而重写。损坏、格式异常或读取失败不会变成空状态覆盖原件。确实命中更早的 `taskRuns` 旧布局时，沿用既有迁移，并先独占创建 `.pre-migration-<uuid>.json` 原字节副本并回读核对；备份或迁移失败则不替换原件。这不等于整套 DSH 数据备份。
+
+## 构建与安装检查
+
+保留 React 18.3.1、TypeScript 6.0.3、DSH 0.1.7-rc.2 依赖约束。仅增加与宿主一致的 React DOM 18.3.1 开发依赖用于隔离预览，锁文件同步更新；没有增加生产依赖。项目级 `allowBuilds` 只批准锁定版本所需的依赖安装脚本。
+
+在已有源码仓库的本任务分支中：
 
 ```sh
-git clone https://github.com/Equinox7379/dsh-mission-control.git
-cd dsh-mission-control
 pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-Build before installing: the repository contains source code, and the generated `lib/` directory is intentionally not committed.
+客户端仍构建为 `window.__ModuleLoader__.load({id:"dsh-mission-control", ...})`，不是另一个独立网页应用。`package.json` 保留官方客户端声明和 Host bundle，`cordis.patch.yml` 保留 Host 入口。生产包使用宿主 React，预览从锁定的开发依赖加载 React/React DOM，它们不进入 TGZ。
 
-### 2. Add the built package to DSH Desktop
+从已构建文件打包时，设置 `DSH_MC_LIB_DIR`、`DSH_MC_PACK_STAGE`、`DSH_MC_PACK_DEST` 三个绝对路径，再运行 `npm run pack:built`。stage 必须是新的隔离目录，脚本不清理或复用已有目录。协议开发语料仍留在仓库，运行时校验合同已编译进 `lib`，不再把开发语料作为 TGZ 安装依赖。
 
-Pack the build into a local TGZ, then choose that TGZ in the main application's **Plugins** page. The Desktop profile is owned by the application; the public `dsh plugin` CLI cannot install into it.
+候选已在 Windows 隔离环境完成标准构建、完整测试和浏览器交互检查。生产安装通过官方 Desktop 的插件页面选择 TGZ；不手工覆盖 profile、复制 node_modules、运行旧恢复脚本或升级 DSH。安装前保留原有任务数据。实际 Desktop 与 2077 组合仍需安装后检查。
+
+## 测试
+
+先构建，再将 `DSH_MC_TEST_TMP` 设置为明确的隔离测试根目录，不能指向用户主目录或真实 DSH_HOME：
 
 ```sh
-npm pack --pack-destination <output-directory>
-```
-
-Select the resulting absolute `.tgz` path. The plugin's bundle registers itself; no manual `cordis.patch.yml` insertion or copying of task state is needed. Follow the Plugins page's restart instruction if it reports one.
-
-### 3. Run your first task
-
-1. Open **任务指挥台** in DSH.
-2. Create a project and a task. Write a concrete objective and acceptance criteria.
-3. In the task's **会话** section, open **会话工具**, refresh the list, and click **绑定** beside the conversation you want to use. You can also choose **新建并绑定**.
-4. Click **交给 DSH 执行**, check the directory, model, and prompt, then choose **确认发送一次**.
-5. Follow the output and tool activity. Verify the result before marking the task complete.
-
-The expandable manual workflow is optional. Use it when you need plan approval, evidence, or an explicit handoff.
-
-## Data and behavior
-
-- Plugin state is stored under the DSH home directory in `storages/dsh-mission-control/`. Task state and execution metadata use separate JSON files.
-- The original conversation remains in DSH's own session storage.
-- Execution uses the selected session's model and permission policy. Model usage follows that session's existing provider configuration and costs.
-- Stop requests are limited to the task's own queued message or still-owned Lead turn; teammates may keep working. Open the conversation's **Agent Team** panel to inspect the Team, and ask the Lead to interrupt individual teammates when needed. Uncertain execution states remain visible instead of being reported as success.
-- Markdown exports default to `Documents/DshMissionControlExports`. Set `DSH_MISSION_CONTROL_EXPORT_DIR` to choose another export directory.
-
-## Development
-
-After installing dependencies, build and run the existing checks. In PowerShell:
-
-```powershell
-$env:DSH_MC_TEST_TMP = Join-Path ([System.IO.Path]::GetTempPath()) 'dsh-mission-control-tests'
-pnpm run build
 pnpm test
-pnpm exec playwright install chromium
 pnpm run test:browser
+pnpm run test:workbench
 ```
 
-The browser health check uses an isolated local server. `test:execution-browser` is a separate, opt-in integration check: it requires a dedicated DSH Lab, creates a demo task, and sends a real model request. Its required `DSH_MC_LAB_*` variables are listed at the top of [the script](tests/execution-browser-smoke.mjs).
+`test:workbench` 打开真实 `lib/client.js` 组件，注入合成会话与 Host API；不调用模型。它检查 64 项任务、空状态、新建、冲突输入、会话绑定、发送确认、重复点击、未确认结果、Teams、人工验收、焦点、样式隔离，以及 1440/960/700/390 像素窗口。测试结果和截图输出到指定测试根下的新子目录。浏览器可用 `DSH_MC_BROWSER_EXECUTABLE` 指定现有 Chromium，否则使用 Playwright 自带浏览器。
 
-To create a distributable package from an existing build:
+`test:execution-browser` 是原有显式真实模型 Lab 入口，本次云端工作没有运行它。不要把它作为普通预览自动启动。
 
-```powershell
-$env:DSH_MC_LIB_DIR = (Resolve-Path lib).Path
-$packRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('dsh-mc-pack-' + [guid]::NewGuid())
-$env:DSH_MC_PACK_STAGE = Join-Path $packRoot 'stage'
-$env:DSH_MC_PACK_DEST = Join-Path $packRoot 'packages'
-npm run pack:built
-```
+本轮实际验证与环境限制见 [VALIDATION.md](docs/VALIDATION.md)。旧版 CI badge 或以前的 66 项结果不代表本候选已经通过同一套环境验证。
 
-This produces a `.tgz` with the built plugin, bundled protocol files, README, and license. The [CI workflow](.github/workflows/ci.yml) checks the build, unit tests, browser health route, and package creation.
-
-### Project layout
-
-| Location | Purpose |
-| --- | --- |
-| `src/client.tsx` | Project and task UI |
-| `src/domain.ts`, `src/storage.ts` | Task workflow and persistent state |
-| `src/execution/` | Dispatch, run observation, stop handling, and execution UI |
-| `src/bridge.ts`, `src/rpc-contracts.ts` | Optional Desktop Bridge integration |
-| `protocol-vendor/` | Pinned protocol schemas and fixtures |
-| `tests/` | Domain, API, persistence, compatibility, and browser checks |
-
-## Feedback and contributions
-
-[Open an issue](https://github.com/Equinox7379/dsh-mission-control/issues) with the DSH version, plugin version, operating system, steps to reproduce, and expected versus actual behavior. Use a small example that does not contain credentials or private conversation data.
-
-Focused fixes and concrete workflow suggestions are welcome. For a larger feature, describe the use case in an issue first. If this console helps your work, a star helps other DSH users find it.
-
-## 中文说明
-
-**任务指挥台让你把 AI 对话整理成可以跟进、验证和交接的工作。**
-
-在项目中建立任务，写明目标与验收标准，绑定一个已有的 DSH 会话；确认工作目录、模型和待发送内容后，再交给 DSH 执行。执行输出、工具调用和任务状态集中显示，模型回合结束与人工验收保持分开。
-
-当前版本为 `0.2.3`，适配 **DSH `0.1.7-rc.2`**，采用中文界面。Windows 隔离构建与相关测试已通过，官方 Desktop 的插件加载与界面已核验；本版本尚未进行生产模型任务的执行验证。官方 Desktop 使用经过认证的 Web Host，旧版 DshDesktop Bridge 是可选集成；窄屏仅供查看。
-
-安装时先按上面的步骤克隆、构建并打包 TGZ，再通过官方 Desktop 的「插件」页面选择该文件，按照页面提示完成加载后打开「任务指挥台」。Desktop 使用独立的 `desktop` profile。源代码仓库不包含生成的 `lib/`，因此不要跳过构建直接安装 GitHub 源码地址。
-
-欢迎提交可复现的问题、实际使用反馈和范围清楚的修复。项目独立开发，不是 DeepSeek 官方产品。
-
-## License
-
-[MIT](LICENSE) © 2026 Equinox7379. Independent community software; not an official DeepSeek product. Third-party dependencies retain their own licenses.
+MIT License.
